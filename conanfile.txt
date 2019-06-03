@@ -1,0 +1,13 @@
+[generators]
+cmake
+
+[requires]
+zlib/1.2.11@conan/stable
+libcurl/7.60.0@bincrafters/stable
+BLAKE2/master@tdmsync2/local
+
+[options]
+zlib:minizip=True
+libcurl:with_openssl=False
+libcurl:with_winssl=False
+BLAKE2:SSE=SSE2
