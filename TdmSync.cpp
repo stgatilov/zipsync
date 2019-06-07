@@ -368,7 +368,6 @@ void UpdateProcess::Init(TargetManifest &&targetMani_, ProvidingManifest &&provi
     downloadDir = "__tdmsync_download";
     updateType = (UpdateType)0xDDDDDDDD;
 
-    unavailableFiles.clear();
     matches.clear();
 }
 
@@ -405,14 +404,15 @@ bool UpdateProcess::DevelopPlan(UpdateType type) {
     }
 
     //find matching providing file for every target file
-    unavailableFiles.clear();
     matches.clear();
+    bool fullPlan = true;
     for (int i = 0; i < targetMani.size(); i++) {
         const TargetFile &tf = targetMani[i];
 
         auto iter = pfIndex.find(tf.contentsHash);
         if (iter == pfIndex.end()) {
-            unavailableFiles.push_back(&tf);
+            matches.push_back(Match{&tf, nullptr});
+            fullPlan = false;
             continue;
         }
         const std::vector<const ProvidedFile*> &candidates = iter->second;
@@ -420,23 +420,18 @@ bool UpdateProcess::DevelopPlan(UpdateType type) {
         int bestScore = 1000000000;
         const ProvidedFile *bestFile = nullptr;
         for (const ProvidedFile *pf : candidates) {
+            if (updateType == UpdateType::SameCompressed && !(pf->compressedHash == tf.compressedHash))
+                continue;
             int score = int(pf->location);
-            if (updateType == UpdateType::SameCompressed) {
-                int diffCmp = !(pf->compressedHash == tf.compressedHash);
-                // 1) Remote file is always the worst (minimize download first)
-                // 2) Among local files, the same-compressed file is better (minimize recompression second)
-                score = (pf->location == ProvidingLocation::RemoteHttp ? 100 + diffCmp : 10 * diffCmp + int(pf->location));
-            }
-
             if (score < bestScore) {
                 bestScore = score;
                 bestFile = pf;
             }
         }
-        matches.push_back(Correspondence(&tf, bestFile));
+        matches.push_back(Match{&tf, bestFile});
     }
 
-    return unavailableFiles.empty();
+    return fullPlan;
 }
 
 

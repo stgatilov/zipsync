@@ -341,3 +341,119 @@ string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
         CHECK(target[i].compressedHash == providing[i].compressedHash);
     }
 }
+
+TEST_CASE("UpdateProcess::DevelopPlan") {
+    ProvidingManifest providing;
+    TargetManifest target;
+
+    struct MatchAnswer {
+        ProvidingLocation bestLocation = ProvidingLocation::Nowhere;
+        std::vector<std::string> filenames;
+    };
+    //for each target filename: list of providing filenames which match
+    std::map<std::string, MatchAnswer> correctMatching[2];
+
+    //generate one file per every possible combination of availability:
+    //  target file is: [missing/samecontents/samecompressed] on [inplace/local/remote]
+    int mode[3] = {0};
+    for (mode[0] = 0; mode[0] < 3; mode[0]++) {
+        for (mode[1] = 0; mode[1] < 5; mode[1]++) {
+            for (mode[2] = 0; mode[2] < 5; mode[2]++) {
+                int targetIdx = target.size();
+                TargetFile tf;
+                tf.contentsHash = GenHash(targetIdx);
+                tf.compressedHash = GenHash(targetIdx + 1000);
+                tf.zipPath = PathAR::FromRel("target" + std::to_string(targetIdx % 4) + ".zip", "nowhere");
+                tf.flhFilename = "file" + std::to_string(targetIdx) + ".dat";
+                //note: other members not used
+
+                MatchAnswer *answer[2] = {&correctMatching[0][tf.flhFilename], &correctMatching[1][tf.flhFilename]};
+                for (int pl = 0; pl < 3; pl++) {
+                    int modes[2] = {mode[pl], -1};
+                    if (modes[0] >= 3) {
+                        modes[1] = mode[0] - 2;
+                        modes[0] = 1;
+                    }
+
+                    for (int j = 0; j < 2; j++) if (modes[j] >= 0) {
+                        int providedIdx = providing.size();
+                        int m = modes[j];
+
+                        ProvidedFile pf;
+                        pf.byterange[0] = (providedIdx+0) * 100000;
+                        pf.byterange[1] = (providedIdx+1) * 100000;
+                        pf.contentsHash = (m >= 1 ? tf.contentsHash : GenHash(providedIdx + 2000));
+                        pf.compressedHash = (m == 2 ? tf.compressedHash : GenHash(providedIdx + 3000));
+                        if (pl == 0) {
+                            pf.location = ProvidingLocation::Local;     //Inplace must be set of DevelopPlan
+                            pf.zipPath = tf.zipPath;
+                            pf.filename = tf.flhFilename;
+                        }
+                        else if (pl == 1) {
+                            pf.location = ProvidingLocation::Local;
+                            pf.zipPath = PathAR::FromRel("other" + std::to_string(providedIdx % 4) + ".zip", "nowhere");
+                            pf.filename = "some_file" + std::to_string(providedIdx);
+                        }
+                        else if (pl == 2) {
+                            pf.location = ProvidingLocation::RemoteHttp;
+                            pf.zipPath = PathAR::FromRel("other" + std::to_string(providedIdx % 4) + ".zip", "http://localhost:7123");
+                            pf.filename = "some_file" + std::to_string(providedIdx);
+                        }
+                        providing.AppendFile(pf);
+
+                        for (int t = 0; t < 2; t++) {
+                            bool matches = (t == 0 ? pf.contentsHash == tf.contentsHash : pf.compressedHash == tf.compressedHash);
+                            if (!matches)
+                                continue;
+                            if (int(pf.location) < int(answer[t]->bestLocation)) {
+                                answer[t]->filenames.clear();
+                                answer[t]->bestLocation = pf.location;
+                            }
+                            if (int(pf.location) == int(answer[t]->bestLocation)) {
+                                answer[t]->filenames.push_back(pf.filename);
+                            }
+                        }
+                    }
+                }
+
+                target.AppendFile(tf);
+            }
+        }
+    }
+
+    std::mt19937 rnd;
+    for (int attempt = 0; attempt < 10; attempt++) {
+
+        //try to develop update plan in both modes
+        for (int t = 0; t < 2; t++) {
+
+            TargetManifest targetCopy = target;
+            ProvidingManifest providingCopy = providing;
+            if (attempt > 0) {
+                //note: here we assume that files are stored in a vector =(
+                std::shuffle(&targetCopy[0], &targetCopy[0] + targetCopy.size(), rnd);
+                std::shuffle(&providingCopy[0], &providingCopy[0] + providingCopy.size(), rnd);
+            }
+
+            UpdateProcess update;
+            update.Init(std::move(targetCopy), std::move(providingCopy), "nowhere");
+            update.DevelopPlan(t == 0 ? UpdateType::SameContents : UpdateType::SameCompressed);
+
+            for (int i = 0; i < update.MatchCount(); i++) {
+                UpdateProcess::Match match = update.GetMatch(i);
+                const MatchAnswer &answer = correctMatching[t][match.target->flhFilename];
+                if (answer.bestLocation == ProvidingLocation::Nowhere)
+                    CHECK(match.provided == nullptr);
+                else {
+                    CHECK(match.provided != nullptr);
+                    std::string fn = match.provided->filename;
+                    CHECK(std::find(answer.filenames.begin(), answer.filenames.end(), fn) != answer.filenames.end());
+                    if (attempt == 0) {
+                        //non-shuffled manifests: check that first optimal match is chosen (to be deterministic)
+                        CHECK(fn == answer.filenames.front());
+                    }
+                }
+            }
+        }
+    }
+}

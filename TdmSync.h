@@ -52,6 +52,7 @@ enum class ProvidingLocation {
     Inplace,        //local zip file in the place where it should be
     Local,          //local zip file (e.g. inside local cache of old versions)
     RemoteHttp,     //file remotely available via HTTP 1.1+
+    Nowhere,        //(should never be used)
 };
 
 /**
@@ -222,6 +223,15 @@ class LocalCache {
  * Represents the whole updating process.
  */
 class UpdateProcess {
+public:
+    struct Match {
+        //target file (surely not NULL)
+        const TargetFile *target;
+        //provided file which will fulfill it (if NULL, then no match found)
+        const ProvidedFile *provided;
+    };
+
+private:
     //the target manifest being the goal of this update
     TargetManifest targetMani;
     //the providing manifest showing the current state of installation
@@ -236,13 +246,8 @@ class UpdateProcess {
     //which type of "sameness" we want to achieve
     UpdateType updateType;
 
-    //set of target files which cannot be obtained from provided files
-    //if not empty, then doing the update is impossible
-    std::vector<const TargetFile*> unavailableFiles;
-
-    typedef std::pair<const TargetFile*, const ProvidedFile*> Correspondence;
     //the best matching provided file for every target file
-    std::vector<Correspondence> matches;
+    std::vector<Match> matches;
 
 public:
     //must be called prior to any usage of an instance
@@ -250,6 +255,8 @@ public:
 
     //decide how to execute the update (which files to find where)
     bool DevelopPlan(UpdateType type);
+    int MatchCount() const { return matches.size(); }
+    const Match &GetMatch(int idx) const { return matches[idx]; }
 
     //TODO: parallel / with iterations?
     void DownloadRemoteFiles(const std::string &downloadDir);
