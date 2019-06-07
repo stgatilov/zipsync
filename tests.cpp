@@ -347,7 +347,7 @@ TEST_CASE("UpdateProcess::DevelopPlan") {
     TargetManifest target;
 
     struct MatchAnswer {
-        ProvidingLocation bestLocation = ProvidingLocation::Nowhere;
+        int bestLocation = int(ProvidingLocation::Nowhere);
         std::vector<std::string> filenames;
     };
     //for each target filename: list of providing filenames which match
@@ -405,11 +405,11 @@ TEST_CASE("UpdateProcess::DevelopPlan") {
                             bool matches = (t == 0 ? pf.contentsHash == tf.contentsHash : pf.compressedHash == tf.compressedHash);
                             if (!matches)
                                 continue;
-                            if (int(pf.location) < int(answer[t]->bestLocation)) {
+                            if (pl < int(answer[t]->bestLocation)) {
                                 answer[t]->filenames.clear();
-                                answer[t]->bestLocation = pf.location;
+                                answer[t]->bestLocation = pl;
                             }
-                            if (int(pf.location) == int(answer[t]->bestLocation)) {
+                            if (pl == int(answer[t]->bestLocation)) {
                                 answer[t]->filenames.push_back(pf.filename);
                             }
                         }
@@ -442,7 +442,7 @@ TEST_CASE("UpdateProcess::DevelopPlan") {
             for (int i = 0; i < update.MatchCount(); i++) {
                 UpdateProcess::Match match = update.GetMatch(i);
                 const MatchAnswer &answer = correctMatching[t][match.target->flhFilename];
-                if (answer.bestLocation == ProvidingLocation::Nowhere)
+                if (answer.filenames.empty())
                     CHECK(match.provided == nullptr);
                 else {
                     CHECK(match.provided != nullptr);

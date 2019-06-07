@@ -49,9 +49,9 @@ struct PathAR {
  * A type of location of a provided file.
  */
 enum class ProvidingLocation {
-    Inplace,        //local zip file in the place where it should be
-    Local,          //local zip file (e.g. inside local cache of old versions)
-    RemoteHttp,     //file remotely available via HTTP 1.1+
+    Inplace = 0,    //local zip file in the place where it should be
+    Local = 1,      //local zip file (e.g. inside local cache of old versions)
+    RemoteHttp = 2, //file remotely available via HTTP 1.1+
     Nowhere,        //(should never be used)
 };
 
