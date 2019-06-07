@@ -11,6 +11,7 @@ set(sources
     tsassert.cpp
     TdmSync.h
     TdmSync.cpp
+
     StdFilesystem.cpp
     StdFilesystem.h
     StdString.cpp
@@ -21,9 +22,14 @@ set(sources
     minizip_private.h
 )
 
-set(test_sources
+set(tests_sources
+    tests.cpp
+)
+
+set(playground_sources
     main.cpp
 )
+
 
 if(MSVC)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W2")
@@ -32,7 +38,11 @@ else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 endif()
 
+
 add_library(libtdmsync ${sources})
 
-add_executable(test ${test_sources})
-target_link_libraries(test libtdmsync ${CONAN_LIBS})
+add_executable(tests ${tests_sources})
+target_link_libraries(tests libtdmsync ${CONAN_LIBS})
+
+add_executable(playground ${playground_sources})
+target_link_libraries(playground libtdmsync ${CONAN_LIBS})

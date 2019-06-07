@@ -5,6 +5,7 @@ cmake
 zlib/1.2.11@conan/stable
 libcurl/7.60.0@bincrafters/stable
 BLAKE2/master@tdmsync2/local
+doctest/2.3.1@bincrafters/stable
 
 [options]
 zlib:minizip=True
