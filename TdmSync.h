@@ -26,6 +26,7 @@ struct HashDigest {
     uint8_t data[32];
 
     bool operator< (const HashDigest &other) const;
+    bool operator== (const HashDigest &other) const;
     std::string Hex() const;
     void Parse(const char *hex);
 };
@@ -150,12 +151,14 @@ public:
     const std::string &GetComment() const { return comment; }
     void SetComment(const std::string &text) { comment = text; }
 
+    int size() const { return files.size(); }
+    const ProvidedFile &operator[](int index) const { return files[index]; }
+    ProvidedFile &operator[](int index) { return files[index]; }
+
     void Clear() { files.clear(); }
     void AppendFile(const ProvidedFile &file) { files.push_back(file); }
     void AppendManifest(const ProvidingManifest &other) { AppendVector(files, other.files); }
     void AppendLocalZip(const std::string &zipPath, const std::string &rootDir);
-
-    const ProvidedFile &FindFile(const HashDigest &hash, bool compressed = false) const;    //???
 
     void ReadFromIni(const IniData &data, const std::string &rootDir);
     IniData WriteToIni() const;
@@ -177,6 +180,10 @@ public:
     const std::string &GetComment() const { return comment; }
     void SetComment(const std::string &text) { comment = text; }
 
+    int size() const { return files.size(); }
+    const TargetFile &operator[](int index) const { return files[index]; }
+    TargetFile &operator[](int index) { return files[index]; }
+
     void Clear() { files.clear(); }
     void AppendFile(const TargetFile &file) { files.push_back(file); }
     void AppendLocalZip(const std::string &zipPath, const std::string &rootDir, const std::string &packageName);
@@ -184,6 +191,8 @@ public:
 
     void ReadFromIni(const IniData &data, const std::string &rootDir);
     IniData WriteToIni() const;
+
+    void ReRoot(const std::string &rootDir);
 };
 
 void AppendManifestsFromLocalZip(

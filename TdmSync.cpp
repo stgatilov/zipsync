@@ -12,8 +12,8 @@
 //(only for viewing in debugger)
 #include "minizip_private.h"
 
-
 namespace fs = stdext;
+
 
 namespace TdmSync {
 
@@ -89,6 +89,9 @@ IniData ReadIniFile(const char *path) {
 
 bool HashDigest::operator< (const HashDigest &other) const {
     return memcmp(data, other.data, sizeof(data)) < 0;
+}
+bool HashDigest::operator== (const HashDigest &other) const {
+    return memcmp(data, other.data, sizeof(data)) == 0;
 }
 std::string HashDigest::Hex() const {
     char text[100];
@@ -304,19 +307,19 @@ IniData TargetManifest::WriteToIni() const {
     });
 
     IniData ini;
-    for (const TargetFile *pf : order) {
+    for (const TargetFile *tf : order) {
         IniSect section;
-        section.push_back(std::make_pair("package", pf->packageName));
-        section.push_back(std::make_pair("contentsHash", pf->contentsHash.Hex()));
-        section.push_back(std::make_pair("compressedHash", pf->compressedHash.Hex()));
-        section.push_back(std::make_pair("lastModTime", std::to_string(pf->flhLastModTime)));
-        section.push_back(std::make_pair("compressionMethod", std::to_string(pf->flhCompressionMethod)));
-        section.push_back(std::make_pair("gpbitFlag", std::to_string(pf->flhGeneralPurposeBitFlag)));
-        section.push_back(std::make_pair("crc32", std::to_string(pf->flhCrc32)));
-        section.push_back(std::make_pair("compressedSize", std::to_string(pf->flhCompressedSize)));
-        section.push_back(std::make_pair("contentsSize", std::to_string(pf->flhContentsSize)));
+        section.push_back(std::make_pair("package", tf->packageName));
+        section.push_back(std::make_pair("contentsHash", tf->contentsHash.Hex()));
+        section.push_back(std::make_pair("compressedHash", tf->compressedHash.Hex()));
+        section.push_back(std::make_pair("lastModTime", std::to_string(tf->flhLastModTime)));
+        section.push_back(std::make_pair("compressionMethod", std::to_string(tf->flhCompressionMethod)));
+        section.push_back(std::make_pair("gpbitFlag", std::to_string(tf->flhGeneralPurposeBitFlag)));
+        section.push_back(std::make_pair("crc32", std::to_string(tf->flhCrc32)));
+        section.push_back(std::make_pair("compressedSize", std::to_string(tf->flhCompressedSize)));
+        section.push_back(std::make_pair("contentsSize", std::to_string(tf->flhContentsSize)));
 
-        std::string secName = pf->zipPath.rel + "||" + pf->flhFilename;
+        std::string secName = tf->zipPath.rel + "||" + tf->flhFilename;
         ini.push_back(std::make_pair(secName, std::move(section)));
     }
 
@@ -346,6 +349,94 @@ void TargetManifest::ReadFromIni(const IniData &data, const std::string &rootDir
 
         AppendFile(tf);
     }
+}
+
+void TargetManifest::ReRoot(const std::string &rootDir) {
+    for (TargetFile &tf : files) {
+        tf.zipPath = PathAR::FromRel(tf.zipPath.rel, rootDir);
+    }
+}
+
+
+void UpdateProcess::Init(TargetManifest &&targetMani_, ProvidingManifest &&providingMani_, const std::string &rootDir_) {
+    targetMani = std::move(targetMani_);
+    providingMani = std::move(providingMani_);
+    rootDir = rootDir_;
+
+    targetMani.ReRoot(rootDir);
+
+    downloadDir = "__tdmsync_download";
+    updateType = (UpdateType)0xDDDDDDDD;
+
+    unavailableFiles.clear();
+    matches.clear();
+}
+
+bool UpdateProcess::DevelopPlan(UpdateType type) {
+    updateType = type;
+
+    //build index of target files: by zip path + file path inside zip
+    std::map<std::string, const TargetFile*> pathToTarget;
+    for (int i = 0; i < targetMani.size(); i++) {
+        const TargetFile &tf = targetMani[i];
+        std::string fullPath = tf.zipPath.abs + "||" + tf.flhFilename;
+        auto pib = pathToTarget.insert(std::make_pair(fullPath, &tf));
+        TdmSyncAssertF(pib.second, "Duplicate target file at place %s", fullPath.c_str());
+    }
+
+    //find providing files which are already in-place
+    for (int i = 0; i < providingMani.size(); i++) {
+        ProvidedFile &pf = providingMani[i];
+        if (pf.location != ProvidingLocation::Local)
+            continue;
+        std::string fullPath = pf.zipPath.abs + "||" + pf.filename;
+        auto iter = pathToTarget.find(fullPath);
+        if (iter != pathToTarget.end()) {
+            //give this providing file priority when choosing where to take file from
+            pf.location = ProvidingLocation::Inplace;
+        }
+    }
+
+    //build index of providing files (by hash on uncompressed file)
+    std::map<HashDigest, std::vector<const ProvidedFile*>> pfIndex;
+    for (int i = 0; i < providingMani.size(); i++) {
+        const ProvidedFile &pf = providingMani[i];
+        pfIndex[pf.contentsHash].push_back(&pf);
+    }
+
+    //find matching providing file for every target file
+    unavailableFiles.clear();
+    matches.clear();
+    for (int i = 0; i < targetMani.size(); i++) {
+        const TargetFile &tf = targetMani[i];
+
+        auto iter = pfIndex.find(tf.contentsHash);
+        if (iter == pfIndex.end()) {
+            unavailableFiles.push_back(&tf);
+            continue;
+        }
+        const std::vector<const ProvidedFile*> &candidates = iter->second;
+
+        int bestScore = 1000000000;
+        const ProvidedFile *bestFile = nullptr;
+        for (const ProvidedFile *pf : candidates) {
+            int score = int(pf->location);
+            if (updateType == UpdateType::SameCompressed) {
+                int diffCmp = !(pf->compressedHash == tf.compressedHash);
+                // 1) Remote file is always the worst (minimize download first)
+                // 2) Among local files, the same-compressed file is better (minimize recompression second)
+                score = (pf->location == ProvidingLocation::RemoteHttp ? 100 + diffCmp : 10 * diffCmp + int(pf->location));
+            }
+
+            if (score < bestScore) {
+                bestScore = score;
+                bestFile = pf;
+            }
+        }
+        matches.push_back(Correspondence(&tf, bestFile));
+    }
+
+    return unavailableFiles.empty();
 }
 
 
