@@ -104,3 +104,11 @@ extern int ZEXPORT unzseek64(unzFile file, ZPOS64_T offset, int origin)
 
 	return UNZ_OK;
 }
+
+extern int ZEXPORT unzIsZip64(unzFile file)
+{
+	unz64_s* s = (unz64_s*)file;
+    if (s == NULL)
+        return 0;
+    return s->isZip64;
+}
