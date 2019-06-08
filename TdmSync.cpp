@@ -156,6 +156,9 @@ void AnalyzeCurrentFile(unzFile zf, ProvidedFile &provided, TargetFile &target) 
     char filename[32768];
     unz_file_info info;
     SAFE_CALL(unzGetCurrentFileInfo(zf, &info, filename, sizeof(filename), NULL, 0, NULL, 0));
+    TdmSyncAssertF(info.version_needed == 20, "File %s needs zip version %d (not supported)", filename, info.version_needed);
+    TdmSyncAssertF((info.flag & 0x08) == 0, "File %s has data descriptor (not supported)", filename);
+    TdmSyncAssertF(info.size_file_extra == 0, "File %s has extra field in header (not supported)", filename);
 
     target.flhFilename = provided.filename = filename;
     target.flhCompressedSize = info.compressed_size;
@@ -209,6 +212,7 @@ void AppendManifestsFromLocalZip(
     PathAR zipPath = PathAR::FromAbs(zipPathAbs, rootDir);
 
     unzFileHolder zf(zipPath.abs.c_str());
+    TdmSyncAssertF(!unzIsZip64(zf), "Zip64 is not supported!");
     SAFE_CALL(unzGoToFirstFile(zf));
     while (1) {
         ProvidedFile pf;
