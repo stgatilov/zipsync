@@ -99,8 +99,8 @@ struct TargetFile {
     //"target package" = a set of files which must be installed (several packages may be chosen)
     std::string packageName;
 
-    //(contents of zip file local header follows)
-    //  local file header signature     4 bytes  (spec: 0x04034b50)
+    //(contents of zip file central header follows)
+    //  version made by                 2 bytes  (minizip: 0)
     //  version needed to extract       2 bytes  (minizip: 20 --- NO zip64!)
     //  general purpose bit flag        2 bytes  ???
     //  compression method              2 bytes  ???
@@ -111,18 +111,14 @@ struct TargetFile {
     //  uncompressed size               4 bytes  (defined from contents --- checked by me)
     //  filename length                 2 bytes  ???
     //  extra field length              2 bytes  (minizip: 0)
-    //  filename (variable size)        ***      ???
-    //  extra field (variable size)     ***      (minizip: empty)
-    //
-    //(additional info from central file header follows)
-    //  version made by                 2 bytes  (minizip: 0)
     //  file comment length             2 bytes  (minizip: 0)
     //  disk number start               2 bytes  (minizip: 0)
     //  internal file attributes        2 bytes  ???
     //  external file attributes        4 bytes  ???
     //  relative offset of local header 4 bytes  (dependent on file layout)
+    //  filename (variable size)        ***      ???
+    //  extra field (variable size)     ***      (minizip: empty)
     //  file comment (variable size)    ***      (minizip: empty)
-
 
     //filename inside zip
     std::string flhFilename;
