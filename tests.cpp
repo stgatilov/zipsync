@@ -121,7 +121,6 @@ TEST_CASE("TargetManifest: Read/Write") {
     tf.flhLastModTime = 1150921251;
     tf.flhCompressionMethod = 8;
     tf.flhGeneralPurposeBitFlag = 2;
-    tf.flhCrc32 = 3810825409U;
     tf.flhCompressedSize = 171234;
     tf.flhContentsSize = 214567;
     mani.AppendFile(tf);
@@ -133,7 +132,6 @@ TEST_CASE("TargetManifest: Read/Write") {
     tf.flhLastModTime = 100000000;
     tf.flhCompressionMethod = 0;
     tf.flhGeneralPurposeBitFlag = 0;
-    tf.flhCrc32 = 1876549870U;
     tf.flhCompressedSize = 4567891;
     tf.flhContentsSize = 4567891;
     mani.AppendFile(tf);
@@ -145,7 +143,6 @@ TEST_CASE("TargetManifest: Read/Write") {
     tf.flhLastModTime = 4000000000U;
     tf.flhCompressionMethod = 8;
     tf.flhGeneralPurposeBitFlag = 6;
-    tf.flhCrc32 = 324619873U;
     tf.flhCompressedSize = 12012;
     tf.flhContentsSize = 12001;
     mani.AppendFile(tf);
@@ -167,7 +164,6 @@ TEST_CASE("TargetManifest: Read/Write") {
         CHECK(src.flhLastModTime == dst.flhLastModTime);
         CHECK(src.flhCompressionMethod == dst.flhCompressionMethod);
         CHECK(src.flhGeneralPurposeBitFlag == dst.flhGeneralPurposeBitFlag);
-        CHECK(src.flhCrc32 == dst.flhCrc32);
         CHECK(src.flhCompressedSize == dst.flhCompressedSize);
         CHECK(src.flhContentsSize == dst.flhContentsSize);
     }
@@ -303,10 +299,6 @@ string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
     CHECK(target[1].flhGeneralPurposeBitFlag == 0);     //no compression (stored)
     CHECK(target[2].flhGeneralPurposeBitFlag == 2);     //"maximum"
     CHECK(target[3].flhGeneralPurposeBitFlag == 6);     //"super fast"
-    CHECK(target[0].flhCrc32 == 0xa3c86cc4);    //looked up in 7-zip
-    CHECK(target[1].flhCrc32 == 0x179c3544);
-    CHECK(target[2].flhCrc32 == 0x4c9bc0a7);
-    CHECK(target[3].flhCrc32 == 0xf8d0b47a);
 
     double RATIOS[4][2] = {
         {0.5, 0.75},        //text is rather compressible

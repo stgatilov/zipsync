@@ -101,19 +101,28 @@ struct TargetFile {
 
     //(contents of zip file local header follows)
     //  local file header signature     4 bytes  (spec: 0x04034b50)
-	//  version needed to extract       2 bytes  (minizip: 20 --- NO zip64!)
-	//  general purpose bit flag        2 bytes  ???
-	//  compression method              2 bytes  ???
-	//  last mod file time              2 bytes  ???
-	//  last mod file date              2 bytes  ???
-	//  crc-32                          4 bytes  (defined from contents)
-	//  compressed size                 4 bytes  (defined from contents)
-	//  uncompressed size               4 bytes  (defined from contents)
-	//  filename length                 2 bytes  ???
-	//  extra field length              2 bytes  (minizip: 0)
-    //  
-	//  filename (variable size)                 ???
-	//  extra field (variable size)              (minizip: empty)
+    //  version needed to extract       2 bytes  (minizip: 20 --- NO zip64!)
+    //  general purpose bit flag        2 bytes  ???
+    //  compression method              2 bytes  ???
+    //  last mod file time              2 bytes  ???
+    //  last mod file date              2 bytes  ???
+    //  crc-32                          4 bytes  (defined from contents --- checked by minizip)
+    //  compressed size                 4 bytes  (defined from contents --- checked by me)
+    //  uncompressed size               4 bytes  (defined from contents --- checked by me)
+    //  filename length                 2 bytes  ???
+    //  extra field length              2 bytes  (minizip: 0)
+    //  filename (variable size)        ***      ???
+    //  extra field (variable size)     ***      (minizip: empty)
+    //
+    //(additional info from central file header follows)
+    //  version made by                 2 bytes  (minizip: 0)
+    //  file comment length             2 bytes  (minizip: 0)
+    //  disk number start               2 bytes  (minizip: 0)
+    //  internal file attributes        2 bytes  ???
+    //  external file attributes        4 bytes  ???
+    //  relative offset of local header 4 bytes  (dependent on file layout)
+    //  file comment (variable size)    ***      (minizip: empty)
+
 
     //filename inside zip
     std::string flhFilename;
@@ -124,12 +133,10 @@ struct TargetFile {
     //compression settings for DEFLATE algorithm
     uint16_t flhGeneralPurposeBitFlag;
 
-    //CRC-32 of uncompressed file contents
-    uint32_t flhCrc32;
-    //size of compressed file
+    //size of compressed file (excessive)
     //note: local file header EXcluded
     uint32_t flhCompressedSize;
-    //size of uncompressed file
+    //size of uncompressed file (excessive)
     uint32_t flhContentsSize;
 
     static bool IsLess_Ini(const TargetFile &a, const TargetFile &b);

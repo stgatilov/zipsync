@@ -166,7 +166,6 @@ void AnalyzeCurrentFile(unzFile zf, ProvidedFile &provided, TargetFile &target) 
     target.flhCompressionMethod = info.compression_method;
     target.flhGeneralPurposeBitFlag = info.flag;
     target.flhLastModTime = info.dosDate;
-    target.flhCrc32 = info.crc;
 
     SAFE_CALL(unzOpenCurrentFile(zf));
     int64_t pos = unzGetCurrentFileZStreamPos64(zf);
@@ -196,10 +195,14 @@ void AnalyzeCurrentFile(unzFile zf, ProvidedFile &provided, TargetFile &target) 
 
         SAFE_CALL(unzCloseCurrentFile(zf));
 
-        if (mode == 0)
+        if (mode == 0) {
+            TdmSyncAssertF(processedBytes == target.flhCompressedSize, "File %s has wrong compressed size: %d instead of %d", filename, target.flhCompressedSize, processedBytes);
             target.compressedHash = provided.compressedHash = cmpHash;
-        else
+        }
+        else {
+            TdmSyncAssertF(processedBytes == target.flhContentsSize, "File %s has wrong uncompressed size: %d instead of %d", filename, target.flhContentsSize, processedBytes);
             target.contentsHash = provided.contentsHash = cmpHash;
+        }
     }
 }
 
@@ -319,7 +322,6 @@ IniData TargetManifest::WriteToIni() const {
         section.push_back(std::make_pair("lastModTime", std::to_string(tf->flhLastModTime)));
         section.push_back(std::make_pair("compressionMethod", std::to_string(tf->flhCompressionMethod)));
         section.push_back(std::make_pair("gpbitFlag", std::to_string(tf->flhGeneralPurposeBitFlag)));
-        section.push_back(std::make_pair("crc32", std::to_string(tf->flhCrc32)));
         section.push_back(std::make_pair("compressedSize", std::to_string(tf->flhCompressedSize)));
         section.push_back(std::make_pair("contentsSize", std::to_string(tf->flhContentsSize)));
 
@@ -347,7 +349,6 @@ void TargetManifest::ReadFromIni(const IniData &data, const std::string &rootDir
         tf.flhLastModTime = std::stoul(dict.at("lastModTime"));
         tf.flhCompressionMethod = std::stoul(dict.at("compressionMethod"));
         tf.flhGeneralPurposeBitFlag = std::stoul(dict.at("gpbitFlag"));
-        tf.flhCrc32 = std::stoul(dict.at("crc32"));
         tf.flhCompressedSize = std::stoul(dict.at("compressedSize"));
         tf.flhContentsSize = std::stoul(dict.at("contentsSize"));
 
