@@ -166,6 +166,8 @@ void AnalyzeCurrentFile(unzFile zf, ProvidedFile &provided, TargetFile &target) 
     target.fhCompressionMethod = info.compression_method;
     target.fhGeneralPurposeBitFlag = info.flag;
     target.fhLastModTime = info.dosDate;
+    target.fhInternalAttribs = info.internal_fa;
+    target.fhExternalAttribs = info.external_fa;
 
     SAFE_CALL(unzOpenCurrentFile(zf));
     int64_t pos = unzGetCurrentFileZStreamPos64(zf);
@@ -324,6 +326,8 @@ IniData TargetManifest::WriteToIni() const {
         section.push_back(std::make_pair("gpbitFlag", std::to_string(tf->fhGeneralPurposeBitFlag)));
         section.push_back(std::make_pair("compressedSize", std::to_string(tf->fhCompressedSize)));
         section.push_back(std::make_pair("contentsSize", std::to_string(tf->fhContentsSize)));
+        section.push_back(std::make_pair("internalAttribs", std::to_string(tf->fhInternalAttribs)));
+        section.push_back(std::make_pair("externalAttribs", std::to_string(tf->fhExternalAttribs)));
 
         std::string secName = tf->zipPath.rel + "||" + tf->fhFilename;
         ini.push_back(std::make_pair(secName, std::move(section)));
@@ -351,6 +355,8 @@ void TargetManifest::ReadFromIni(const IniData &data, const std::string &rootDir
         tf.fhGeneralPurposeBitFlag = std::stoul(dict.at("gpbitFlag"));
         tf.fhCompressedSize = std::stoul(dict.at("compressedSize"));
         tf.fhContentsSize = std::stoul(dict.at("contentsSize"));
+        tf.fhInternalAttribs = std::stoul(dict.at("internalAttribs"));
+        tf.fhExternalAttribs = std::stoul(dict.at("externalAttribs"));
 
         AppendFile(tf);
     }

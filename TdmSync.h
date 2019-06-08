@@ -128,6 +128,10 @@ struct TargetFile {
     uint16_t fhCompressionMethod;
     //compression settings for DEFLATE algorithm
     uint16_t fhGeneralPurposeBitFlag;
+    //internal attributes
+    uint16_t fhInternalAttribs;
+    //external attributes
+    uint32_t fhExternalAttribs;
 
     //size of compressed file (excessive)
     //note: local file header EXcluded

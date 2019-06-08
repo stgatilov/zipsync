@@ -123,6 +123,8 @@ TEST_CASE("TargetManifest: Read/Write") {
     tf.fhGeneralPurposeBitFlag = 2;
     tf.fhCompressedSize = 171234;
     tf.fhContentsSize = 214567;
+    tf.fhInternalAttribs = 1234;
+    tf.fhExternalAttribs = 123454321;
     mani.AppendFile(tf);
     tf.packageName = "assets";
     tf.zipPath.rel = "basic_assets.pk4";
@@ -134,6 +136,8 @@ TEST_CASE("TargetManifest: Read/Write") {
     tf.fhGeneralPurposeBitFlag = 0;
     tf.fhCompressedSize = 4567891;
     tf.fhContentsSize = 4567891;
+    tf.fhInternalAttribs = 0;
+    tf.fhExternalAttribs = 4000000000U;
     mani.AppendFile(tf);
     tf.packageName = "assets";
     tf.zipPath.rel = "subdir/win32/interesting_name456.pk4";
@@ -145,6 +149,8 @@ TEST_CASE("TargetManifest: Read/Write") {
     tf.fhGeneralPurposeBitFlag = 6;
     tf.fhCompressedSize = 12012;
     tf.fhContentsSize = 12001;
+    tf.fhInternalAttribs = 7;
+    tf.fhExternalAttribs = 45;
     mani.AppendFile(tf);
 
     IniData savedIni = mani.WriteToIni();
@@ -232,7 +238,10 @@ string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
     zipOpenNewFileInZip(zf, fnRndDat.c_str(), NULL, NULL, 0, NULL, 0, NULL, 0, 0);
     PACK_BUF(cntRndDat);
     zipCloseFileInZip(zf);
-    zip_fileinfo info; info.dosDate = 123456789;
+    zip_fileinfo info;
+    info.dosDate = 123456789;
+    info.internal_fa = 123;
+    info.external_fa = 0xDEADBEEF;
     zipOpenNewFileInZip(zf, fnSeqBin.c_str(), &info, NULL, 0, NULL, 0, NULL, Z_DEFLATED, Z_BEST_COMPRESSION);
     PACK_BUF(cntSeqBin);
     zipCloseFileInZip(zf);
@@ -299,6 +308,14 @@ string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
     CHECK(target[1].fhGeneralPurposeBitFlag == 0);     //no compression (stored)
     CHECK(target[2].fhGeneralPurposeBitFlag == 2);     //"maximum"
     CHECK(target[3].fhGeneralPurposeBitFlag == 6);     //"super fast"
+    CHECK(target[0].fhInternalAttribs == 1);        //Z_TEXT
+    CHECK(target[1].fhInternalAttribs == 0);        //Z_BINARY
+    CHECK(target[2].fhInternalAttribs == 123);      //custom (see above)
+    CHECK(target[3].fhInternalAttribs == 0);        //Z_BINARY
+    CHECK(target[0].fhExternalAttribs == 0);
+    CHECK(target[1].fhExternalAttribs == 0);
+    CHECK(target[2].fhExternalAttribs == 0xDEADBEEF);
+    CHECK(target[3].fhExternalAttribs == 0);
 
     double RATIOS[4][2] = {
         {0.5, 0.75},        //text is rather compressible
