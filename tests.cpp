@@ -117,34 +117,34 @@ TEST_CASE("TargetManifest: Read/Write") {
     tf.zipPath.rel = "subdir/win32/interesting_name456.pk4";
     tf.compressedHash = GenHash(1);
     tf.contentsHash = GenHash(2);
-    tf.flhFilename = "textures/model/darkmod/grass/grass01.jpg";
-    tf.flhLastModTime = 1150921251;
-    tf.flhCompressionMethod = 8;
-    tf.flhGeneralPurposeBitFlag = 2;
-    tf.flhCompressedSize = 171234;
-    tf.flhContentsSize = 214567;
+    tf.fhFilename = "textures/model/darkmod/grass/grass01.jpg";
+    tf.fhLastModTime = 1150921251;
+    tf.fhCompressionMethod = 8;
+    tf.fhGeneralPurposeBitFlag = 2;
+    tf.fhCompressedSize = 171234;
+    tf.fhContentsSize = 214567;
     mani.AppendFile(tf);
     tf.packageName = "assets";
     tf.zipPath.rel = "basic_assets.pk4";
     tf.compressedHash = GenHash(5);
     tf.contentsHash = GenHash(6);
-    tf.flhFilename = "models/darkmod/guards/head.lwo";
-    tf.flhLastModTime = 100000000;
-    tf.flhCompressionMethod = 0;
-    tf.flhGeneralPurposeBitFlag = 0;
-    tf.flhCompressedSize = 4567891;
-    tf.flhContentsSize = 4567891;
+    tf.fhFilename = "models/darkmod/guards/head.lwo";
+    tf.fhLastModTime = 100000000;
+    tf.fhCompressionMethod = 0;
+    tf.fhGeneralPurposeBitFlag = 0;
+    tf.fhCompressedSize = 4567891;
+    tf.fhContentsSize = 4567891;
     mani.AppendFile(tf);
     tf.packageName = "assets";
     tf.zipPath.rel = "subdir/win32/interesting_name456.pk4";
     tf.compressedHash = GenHash(3);
     tf.contentsHash = GenHash(4);
-    tf.flhFilename = "textures/model/standalone/menu.png";
-    tf.flhLastModTime = 4000000000U;
-    tf.flhCompressionMethod = 8;
-    tf.flhGeneralPurposeBitFlag = 6;
-    tf.flhCompressedSize = 12012;
-    tf.flhContentsSize = 12001;
+    tf.fhFilename = "textures/model/standalone/menu.png";
+    tf.fhLastModTime = 4000000000U;
+    tf.fhCompressionMethod = 8;
+    tf.fhGeneralPurposeBitFlag = 6;
+    tf.fhCompressedSize = 12012;
+    tf.fhContentsSize = 12001;
     mani.AppendFile(tf);
 
     IniData savedIni = mani.WriteToIni();
@@ -160,12 +160,12 @@ TEST_CASE("TargetManifest: Read/Write") {
         CHECK(src.packageName == dst.packageName);
         CHECK(src.compressedHash == dst.compressedHash);
         CHECK(src.contentsHash == dst.contentsHash);
-        CHECK(src.flhFilename == dst.flhFilename);
-        CHECK(src.flhLastModTime == dst.flhLastModTime);
-        CHECK(src.flhCompressionMethod == dst.flhCompressionMethod);
-        CHECK(src.flhGeneralPurposeBitFlag == dst.flhGeneralPurposeBitFlag);
-        CHECK(src.flhCompressedSize == dst.flhCompressedSize);
-        CHECK(src.flhContentsSize == dst.flhContentsSize);
+        CHECK(src.fhFilename == dst.fhFilename);
+        CHECK(src.fhLastModTime == dst.fhLastModTime);
+        CHECK(src.fhCompressionMethod == dst.fhCompressionMethod);
+        CHECK(src.fhGeneralPurposeBitFlag == dst.fhGeneralPurposeBitFlag);
+        CHECK(src.fhCompressedSize == dst.fhCompressedSize);
+        CHECK(src.fhContentsSize == dst.fhContentsSize);
     }
 
     for (int t = 0; t < 5; t++) {
@@ -265,7 +265,7 @@ string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
     REQUIRE(providing[2].filename == fnSeqBin    );
     REQUIRE(providing[3].filename == fnDoubleDump);
     for (int i = 0; i < target.size(); i++)
-        REQUIRE(target[i].flhFilename == providing[i].filename);
+        REQUIRE(target[i].fhFilename == providing[i].filename);
 
     CHECK(providing[0].zipPath.abs == zipPath1);  CHECK(target[0].zipPath.abs == zipPath1);
     CHECK(providing[1].zipPath.abs == zipPath1);  CHECK(target[1].zipPath.abs == zipPath1);
@@ -281,24 +281,24 @@ string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
     CHECK(providing[3].contentsHash.Hex() == "009c0860b467803040c61deb6544a3f515ac64c63d234e286d3e2fa352411e91");
     for (int i = 0; i < target.size(); i++)
         CHECK(target[i].contentsHash == providing[i].contentsHash);
-    CHECK(target[0].flhLastModTime == 0);
-    CHECK(target[1].flhLastModTime == 0);
-    CHECK(target[2].flhLastModTime == 123456789);
-    CHECK(target[3].flhLastModTime == 0);
-    CHECK(target[0].flhCompressionMethod == Z_DEFLATED);
-    CHECK(target[1].flhCompressionMethod == 0);
-    CHECK(target[2].flhCompressionMethod == Z_DEFLATED);
-    CHECK(target[3].flhCompressionMethod == Z_DEFLATED);
+    CHECK(target[0].fhLastModTime == 0);
+    CHECK(target[1].fhLastModTime == 0);
+    CHECK(target[2].fhLastModTime == 123456789);
+    CHECK(target[3].fhLastModTime == 0);
+    CHECK(target[0].fhCompressionMethod == Z_DEFLATED);
+    CHECK(target[1].fhCompressionMethod == 0);
+    CHECK(target[2].fhCompressionMethod == Z_DEFLATED);
+    CHECK(target[3].fhCompressionMethod == Z_DEFLATED);
 #define SIZE_BUF(buf) buf.size() * sizeof(buf[0])
-    CHECK(target[0].flhContentsSize == SIZE_BUF(cntPkgJson));
-    CHECK(target[1].flhContentsSize == SIZE_BUF(cntRndDat));
-    CHECK(target[2].flhContentsSize == SIZE_BUF(cntSeqBin));
-    CHECK(target[3].flhContentsSize == SIZE_BUF(cntDoubleDump));
+    CHECK(target[0].fhContentsSize == SIZE_BUF(cntPkgJson));
+    CHECK(target[1].fhContentsSize == SIZE_BUF(cntRndDat));
+    CHECK(target[2].fhContentsSize == SIZE_BUF(cntSeqBin));
+    CHECK(target[3].fhContentsSize == SIZE_BUF(cntDoubleDump));
 #undef SIZE_BUF
-    CHECK(target[0].flhGeneralPurposeBitFlag == 0);     //"normal"
-    CHECK(target[1].flhGeneralPurposeBitFlag == 0);     //no compression (stored)
-    CHECK(target[2].flhGeneralPurposeBitFlag == 2);     //"maximum"
-    CHECK(target[3].flhGeneralPurposeBitFlag == 6);     //"super fast"
+    CHECK(target[0].fhGeneralPurposeBitFlag == 0);     //"normal"
+    CHECK(target[1].fhGeneralPurposeBitFlag == 0);     //no compression (stored)
+    CHECK(target[2].fhGeneralPurposeBitFlag == 2);     //"maximum"
+    CHECK(target[3].fhGeneralPurposeBitFlag == 6);     //"super fast"
 
     double RATIOS[4][2] = {
         {0.5, 0.75},        //text is rather compressible
@@ -307,14 +307,14 @@ string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
         {0.3, 0.4},         //doubles are well-compressible
     };
     for (int i = 0; i < 4; i++) {
-        double ratio = double(target[i].flhCompressedSize) / target[i].flhContentsSize;
+        double ratio = double(target[i].fhCompressedSize) / target[i].fhContentsSize;
         CHECK(ratio >= RATIOS[i][0]);  CHECK(ratio <= RATIOS[i][1]);
     }
 
     for (int i = 0; i < 4; i++) {
         const uint32_t *br = providing[i].byterange;
         std::vector<char> fdata(br[1] - br[0]);
-        int totalSize = target[i].flhCompressedSize + target[i].flhFilename.size() + 30;
+        int totalSize = target[i].fhCompressedSize + target[i].fhFilename.size() + 30;
         CHECK(fdata.size() == totalSize);
 
         FILE *f = fopen(providing[i].zipPath.abs.c_str(), "rb");
@@ -324,10 +324,10 @@ string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
         fclose(f);
 
         CHECK(*(int*)&fdata[0] == 0x04034b50);   //local file header signature
-        CHECK(memcmp(&fdata[30], target[i].flhFilename.c_str(), target[i].flhFilename.size()) == 0);
+        CHECK(memcmp(&fdata[30], target[i].fhFilename.c_str(), target[i].fhFilename.size()) == 0);
 
         HashDigest digest;
-        int offs = fdata.size() - target[i].flhCompressedSize, sz = target[i].flhCompressedSize;
+        int offs = fdata.size() - target[i].fhCompressedSize, sz = target[i].fhCompressedSize;
         blake2s(digest.data, sizeof(digest), fdata.data() + offs, sz, NULL, 0);
         CHECK(target[i].compressedHash == digest);
         CHECK(target[i].compressedHash == providing[i].compressedHash);
@@ -356,10 +356,10 @@ TEST_CASE("UpdateProcess::DevelopPlan") {
                 tf.contentsHash = GenHash(targetIdx);
                 tf.compressedHash = GenHash(targetIdx + 1000);
                 tf.zipPath = PathAR::FromRel("target" + std::to_string(targetIdx % 4) + ".zip", "nowhere");
-                tf.flhFilename = "file" + std::to_string(targetIdx) + ".dat";
+                tf.fhFilename = "file" + std::to_string(targetIdx) + ".dat";
                 //note: other members not used
 
-                MatchAnswer *answer[2] = {&correctMatching[0][tf.flhFilename], &correctMatching[1][tf.flhFilename]};
+                MatchAnswer *answer[2] = {&correctMatching[0][tf.fhFilename], &correctMatching[1][tf.fhFilename]};
                 for (int pl = 0; pl < 3; pl++) {
                     int modes[2] = {mode[pl], -1};
                     if (modes[0] >= 3) {
@@ -379,7 +379,7 @@ TEST_CASE("UpdateProcess::DevelopPlan") {
                         if (pl == 0) {
                             pf.location = ProvidingLocation::Local;     //Inplace must be set of DevelopPlan
                             pf.zipPath = tf.zipPath;
-                            pf.filename = tf.flhFilename;
+                            pf.filename = tf.fhFilename;
                         }
                         else if (pl == 1) {
                             pf.location = ProvidingLocation::Local;
@@ -433,7 +433,7 @@ TEST_CASE("UpdateProcess::DevelopPlan") {
 
             for (int i = 0; i < update.MatchCount(); i++) {
                 UpdateProcess::Match match = update.GetMatch(i);
-                const MatchAnswer &answer = correctMatching[t][match.target->flhFilename];
+                const MatchAnswer &answer = correctMatching[t][match.target->fhFilename];
                 if (answer.filenames.empty())
                     CHECK(match.provided == nullptr);
                 else {

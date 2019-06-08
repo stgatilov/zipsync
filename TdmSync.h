@@ -121,19 +121,19 @@ struct TargetFile {
     //  file comment (variable size)    ***      (minizip: empty)
 
     //filename inside zip
-    std::string flhFilename;
+    std::string fhFilename;
     //last modification time in DOS format
-    uint32_t flhLastModTime;
+    uint32_t fhLastModTime;
     //compression method
-    uint16_t flhCompressionMethod;
+    uint16_t fhCompressionMethod;
     //compression settings for DEFLATE algorithm
-    uint16_t flhGeneralPurposeBitFlag;
+    uint16_t fhGeneralPurposeBitFlag;
 
     //size of compressed file (excessive)
     //note: local file header EXcluded
-    uint32_t flhCompressedSize;
+    uint32_t fhCompressedSize;
     //size of uncompressed file (excessive)
-    uint32_t flhContentsSize;
+    uint32_t fhContentsSize;
 
     static bool IsLess_Ini(const TargetFile &a, const TargetFile &b);
 };

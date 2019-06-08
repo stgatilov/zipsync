@@ -160,12 +160,12 @@ void AnalyzeCurrentFile(unzFile zf, ProvidedFile &provided, TargetFile &target) 
     TdmSyncAssertF((info.flag & 0x08) == 0, "File %s has data descriptor (not supported)", filename);
     TdmSyncAssertF(info.size_file_extra == 0, "File %s has extra field in header (not supported)", filename);
 
-    target.flhFilename = provided.filename = filename;
-    target.flhCompressedSize = info.compressed_size;
-    target.flhContentsSize = info.uncompressed_size;
-    target.flhCompressionMethod = info.compression_method;
-    target.flhGeneralPurposeBitFlag = info.flag;
-    target.flhLastModTime = info.dosDate;
+    target.fhFilename = provided.filename = filename;
+    target.fhCompressedSize = info.compressed_size;
+    target.fhContentsSize = info.uncompressed_size;
+    target.fhCompressionMethod = info.compression_method;
+    target.fhGeneralPurposeBitFlag = info.flag;
+    target.fhLastModTime = info.dosDate;
 
     SAFE_CALL(unzOpenCurrentFile(zf));
     int64_t pos = unzGetCurrentFileZStreamPos64(zf);
@@ -196,11 +196,11 @@ void AnalyzeCurrentFile(unzFile zf, ProvidedFile &provided, TargetFile &target) 
         SAFE_CALL(unzCloseCurrentFile(zf));
 
         if (mode == 0) {
-            TdmSyncAssertF(processedBytes == target.flhCompressedSize, "File %s has wrong compressed size: %d instead of %d", filename, target.flhCompressedSize, processedBytes);
+            TdmSyncAssertF(processedBytes == target.fhCompressedSize, "File %s has wrong compressed size: %d instead of %d", filename, target.fhCompressedSize, processedBytes);
             target.compressedHash = provided.compressedHash = cmpHash;
         }
         else {
-            TdmSyncAssertF(processedBytes == target.flhContentsSize, "File %s has wrong uncompressed size: %d instead of %d", filename, target.flhContentsSize, processedBytes);
+            TdmSyncAssertF(processedBytes == target.fhContentsSize, "File %s has wrong uncompressed size: %d instead of %d", filename, target.fhContentsSize, processedBytes);
             target.contentsHash = provided.contentsHash = cmpHash;
         }
     }
@@ -251,7 +251,7 @@ bool ProvidedFile::IsLess_Ini(const ProvidedFile &a, const ProvidedFile &b) {
     return std::tie(a.zipPath.rel, a.filename, a.contentsHash) < std::tie(b.zipPath.rel, b.filename, b.contentsHash);
 }
 bool TargetFile::IsLess_Ini(const TargetFile &a, const TargetFile &b) {
-    return std::tie(a.packageName, a.zipPath.rel, a.flhFilename, a.contentsHash) < std::tie(b.packageName, b.zipPath.rel, b.flhFilename, b.contentsHash);
+    return std::tie(a.packageName, a.zipPath.rel, a.fhFilename, a.contentsHash) < std::tie(b.packageName, b.zipPath.rel, b.fhFilename, b.contentsHash);
 }
 
 IniData ProvidingManifest::WriteToIni() const {
@@ -319,13 +319,13 @@ IniData TargetManifest::WriteToIni() const {
         section.push_back(std::make_pair("package", tf->packageName));
         section.push_back(std::make_pair("contentsHash", tf->contentsHash.Hex()));
         section.push_back(std::make_pair("compressedHash", tf->compressedHash.Hex()));
-        section.push_back(std::make_pair("lastModTime", std::to_string(tf->flhLastModTime)));
-        section.push_back(std::make_pair("compressionMethod", std::to_string(tf->flhCompressionMethod)));
-        section.push_back(std::make_pair("gpbitFlag", std::to_string(tf->flhGeneralPurposeBitFlag)));
-        section.push_back(std::make_pair("compressedSize", std::to_string(tf->flhCompressedSize)));
-        section.push_back(std::make_pair("contentsSize", std::to_string(tf->flhContentsSize)));
+        section.push_back(std::make_pair("lastModTime", std::to_string(tf->fhLastModTime)));
+        section.push_back(std::make_pair("compressionMethod", std::to_string(tf->fhCompressionMethod)));
+        section.push_back(std::make_pair("gpbitFlag", std::to_string(tf->fhGeneralPurposeBitFlag)));
+        section.push_back(std::make_pair("compressedSize", std::to_string(tf->fhCompressedSize)));
+        section.push_back(std::make_pair("contentsSize", std::to_string(tf->fhContentsSize)));
 
-        std::string secName = tf->zipPath.rel + "||" + tf->flhFilename;
+        std::string secName = tf->zipPath.rel + "||" + tf->fhFilename;
         ini.push_back(std::make_pair(secName, std::move(section)));
     }
 
@@ -339,18 +339,18 @@ void TargetManifest::ReadFromIni(const IniData &data, const std::string &rootDir
         size_t pos = name.find("||");
         TdmSyncAssertF(pos != std::string::npos, "Section name does not specify a file: %s", name.c_str());
         tf.zipPath = PathAR::FromRel(name.substr(0, pos), rootDir);
-        tf.flhFilename = name.substr(pos + 2);
+        tf.fhFilename = name.substr(pos + 2);
 
         std::map<std::string, std::string> dict(pNS.second.begin(), pNS.second.end());
         tf.packageName = dict.at("package");
         tf.contentsHash.Parse(dict.at("contentsHash").c_str());
         tf.compressedHash.Parse(dict.at("compressedHash").c_str());
 
-        tf.flhLastModTime = std::stoul(dict.at("lastModTime"));
-        tf.flhCompressionMethod = std::stoul(dict.at("compressionMethod"));
-        tf.flhGeneralPurposeBitFlag = std::stoul(dict.at("gpbitFlag"));
-        tf.flhCompressedSize = std::stoul(dict.at("compressedSize"));
-        tf.flhContentsSize = std::stoul(dict.at("contentsSize"));
+        tf.fhLastModTime = std::stoul(dict.at("lastModTime"));
+        tf.fhCompressionMethod = std::stoul(dict.at("compressionMethod"));
+        tf.fhGeneralPurposeBitFlag = std::stoul(dict.at("gpbitFlag"));
+        tf.fhCompressedSize = std::stoul(dict.at("compressedSize"));
+        tf.fhContentsSize = std::stoul(dict.at("contentsSize"));
 
         AppendFile(tf);
     }
@@ -383,7 +383,7 @@ bool UpdateProcess::DevelopPlan(UpdateType type) {
     std::map<std::string, const TargetFile*> pathToTarget;
     for (int i = 0; i < targetMani.size(); i++) {
         const TargetFile &tf = targetMani[i];
-        std::string fullPath = tf.zipPath.abs + "||" + tf.flhFilename;
+        std::string fullPath = tf.zipPath.abs + "||" + tf.fhFilename;
         auto pib = pathToTarget.insert(std::make_pair(fullPath, &tf));
         TdmSyncAssertF(pib.second, "Duplicate target file at place %s", fullPath.c_str());
     }
