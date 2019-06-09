@@ -43,6 +43,8 @@ struct PathAR {
 
     static PathAR FromAbs(std::string absPath, std::string rootDir);
     static PathAR FromRel(std::string relPath, std::string rootDir);
+
+    static std::string PrefixFile(std::string absPath, std::string prefix);
 };
 
 /**
@@ -77,6 +79,7 @@ struct ProvidedFile {
     //note: local file header EXcluded
     HashDigest compressedHash;
 
+    static bool IsLess_ZipFn(const ProvidedFile &a, const ProvidedFile &b);
     static bool IsLess_Ini(const ProvidedFile &a, const ProvidedFile &b);
 };
 
@@ -138,6 +141,7 @@ struct TargetFile {
     //note: local file header EXcluded
     HashDigest compressedHash;
 
+    static bool IsLess_ZipFn(const TargetFile &a, const TargetFile &b);
     static bool IsLess_Ini(const TargetFile &a, const TargetFile &b);
 };
 
@@ -247,13 +251,15 @@ private:
     //all target files zip paths are treated relative to it
     std::string rootDir;
 
-    //the temporary directory where all the downloaded stuff goes
-    std::string downloadDir;
     //which type of "sameness" we want to achieve
     UpdateType updateType;
 
     //the best matching provided file for every target file
     std::vector<Match> matches;
+
+    //the manifest containing provided files created by repacking process
+    //note: "compressedHash" may be incorrect for these files!
+    ProvidingManifest repackedMani;
 
 public:
     //must be called prior to any usage of an instance
@@ -261,16 +267,16 @@ public:
 
     //decide how to execute the update (which files to find where)
     bool DevelopPlan(UpdateType type);
+
     int MatchCount() const { return matches.size(); }
     const Match &GetMatch(int idx) const { return matches[idx]; }
 
-    //TODO: parallel / with iterations?
     void DownloadRemoteFiles(const std::string &downloadDir);
 
-    //TODO: parallel / with iterations / overlapped with previous?
+    //having all matches available locally, perform the update
+    //TODO: pass progress callback
     void RepackZips();
 
-    //TODO: parallel / with iterations / overlapped with previous?
     void RemoveOldZips(const LocalCache *cache);
 };
 
