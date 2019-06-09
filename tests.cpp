@@ -113,11 +113,11 @@ TEST_CASE("TargetManifest: Read/Write") {
     TargetManifest mani;
 
     TargetFile tf;
-    tf.packageName = "interesting";
+    tf.package = "interesting";
     tf.zipPath.rel = "subdir/win32/interesting_name456.pk4";
     tf.compressedHash = GenHash(1);
     tf.contentsHash = GenHash(2);
-    tf.fhFilename = "textures/model/darkmod/grass/grass01.jpg";
+    tf.filename = "textures/model/darkmod/grass/grass01.jpg";
     tf.fhLastModTime = 1150921251;
     tf.fhCompressionMethod = 8;
     tf.fhGeneralPurposeBitFlag = 2;
@@ -126,11 +126,11 @@ TEST_CASE("TargetManifest: Read/Write") {
     tf.fhInternalAttribs = 1234;
     tf.fhExternalAttribs = 123454321;
     mani.AppendFile(tf);
-    tf.packageName = "assets";
+    tf.package = "assets";
     tf.zipPath.rel = "basic_assets.pk4";
     tf.compressedHash = GenHash(5);
     tf.contentsHash = GenHash(6);
-    tf.fhFilename = "models/darkmod/guards/head.lwo";
+    tf.filename = "models/darkmod/guards/head.lwo";
     tf.fhLastModTime = 100000000;
     tf.fhCompressionMethod = 0;
     tf.fhGeneralPurposeBitFlag = 0;
@@ -139,11 +139,11 @@ TEST_CASE("TargetManifest: Read/Write") {
     tf.fhInternalAttribs = 0;
     tf.fhExternalAttribs = 4000000000U;
     mani.AppendFile(tf);
-    tf.packageName = "assets";
+    tf.package = "assets";
     tf.zipPath.rel = "subdir/win32/interesting_name456.pk4";
     tf.compressedHash = GenHash(3);
     tf.contentsHash = GenHash(4);
-    tf.fhFilename = "textures/model/standalone/menu.png";
+    tf.filename = "textures/model/standalone/menu.png";
     tf.fhLastModTime = 4000000000U;
     tf.fhCompressionMethod = 8;
     tf.fhGeneralPurposeBitFlag = 6;
@@ -163,10 +163,10 @@ TEST_CASE("TargetManifest: Read/Write") {
         const TargetFile &src = mani[order[i]];
         const TargetFile &dst = restored[i];
         CHECK(src.zipPath.rel == dst.zipPath.rel);
-        CHECK(src.packageName == dst.packageName);
+        CHECK(src.package == dst.package);
         CHECK(src.compressedHash == dst.compressedHash);
         CHECK(src.contentsHash == dst.contentsHash);
-        CHECK(src.fhFilename == dst.fhFilename);
+        CHECK(src.filename == dst.filename);
         CHECK(src.fhLastModTime == dst.fhLastModTime);
         CHECK(src.fhCompressionMethod == dst.fhCompressionMethod);
         CHECK(src.fhGeneralPurposeBitFlag == dst.fhGeneralPurposeBitFlag);
@@ -274,16 +274,16 @@ string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
     REQUIRE(providing[2].filename == fnSeqBin    );
     REQUIRE(providing[3].filename == fnDoubleDump);
     for (int i = 0; i < target.size(); i++)
-        REQUIRE(target[i].fhFilename == providing[i].filename);
+        REQUIRE(target[i].filename == providing[i].filename);
 
     CHECK(providing[0].zipPath.abs == zipPath1);  CHECK(target[0].zipPath.abs == zipPath1);
     CHECK(providing[1].zipPath.abs == zipPath1);  CHECK(target[1].zipPath.abs == zipPath1);
     CHECK(providing[2].zipPath.abs == zipPath1);  CHECK(target[2].zipPath.abs == zipPath1);
     CHECK(providing[3].zipPath.abs == zipPath2);  CHECK(target[3].zipPath.abs == zipPath2);
-    CHECK(providing[0].location == ProvidingLocation::Local);       CHECK(target[0].packageName == "default");
-    CHECK(providing[1].location == ProvidingLocation::Local);       CHECK(target[1].packageName == "default");
-    CHECK(providing[2].location == ProvidingLocation::Local);       CHECK(target[2].packageName == "default");
-    CHECK(providing[3].location == ProvidingLocation::RemoteHttp);  CHECK(target[3].packageName == "chaos"  );
+    CHECK(providing[0].location == ProvidingLocation::Local);       CHECK(target[0].package == "default");
+    CHECK(providing[1].location == ProvidingLocation::Local);       CHECK(target[1].package == "default");
+    CHECK(providing[2].location == ProvidingLocation::Local);       CHECK(target[2].package == "default");
+    CHECK(providing[3].location == ProvidingLocation::RemoteHttp);  CHECK(target[3].package == "chaos"  );
     CHECK(providing[0].contentsHash.Hex() == "8ec061d20526f1e5ce56519f09bc1ee2ad065464e3e7cbbb94324865bca95a45"); //computed externally in Python
     CHECK(providing[1].contentsHash.Hex() == "75b25a4dd22ac100925e09d62016c0ffdb5998b470bc685773620d4f37458b69");
     CHECK(providing[2].contentsHash.Hex() == "54b97c474a60b36c16a5c6beea5b2a03a400096481196bbfe2202ef7a547408c");
@@ -331,7 +331,7 @@ string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
     for (int i = 0; i < 4; i++) {
         const uint32_t *br = providing[i].byterange;
         std::vector<char> fdata(br[1] - br[0]);
-        int totalSize = target[i].fhCompressedSize + target[i].fhFilename.size() + 30;
+        int totalSize = target[i].fhCompressedSize + target[i].filename.size() + 30;
         CHECK(fdata.size() == totalSize);
 
         FILE *f = fopen(providing[i].zipPath.abs.c_str(), "rb");
@@ -341,7 +341,7 @@ string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
         fclose(f);
 
         CHECK(*(int*)&fdata[0] == 0x04034b50);   //local file header signature
-        CHECK(memcmp(&fdata[30], target[i].fhFilename.c_str(), target[i].fhFilename.size()) == 0);
+        CHECK(memcmp(&fdata[30], target[i].filename.c_str(), target[i].filename.size()) == 0);
 
         HashDigest digest;
         int offs = fdata.size() - target[i].fhCompressedSize, sz = target[i].fhCompressedSize;
@@ -373,10 +373,10 @@ TEST_CASE("UpdateProcess::DevelopPlan") {
                 tf.contentsHash = GenHash(targetIdx);
                 tf.compressedHash = GenHash(targetIdx + 1000);
                 tf.zipPath = PathAR::FromRel("target" + std::to_string(targetIdx % 4) + ".zip", "nowhere");
-                tf.fhFilename = "file" + std::to_string(targetIdx) + ".dat";
+                tf.filename = "file" + std::to_string(targetIdx) + ".dat";
                 //note: other members not used
 
-                MatchAnswer *answer[2] = {&correctMatching[0][tf.fhFilename], &correctMatching[1][tf.fhFilename]};
+                MatchAnswer *answer[2] = {&correctMatching[0][tf.filename], &correctMatching[1][tf.filename]};
                 for (int pl = 0; pl < 3; pl++) {
                     int modes[2] = {mode[pl], -1};
                     if (modes[0] >= 3) {
@@ -396,7 +396,7 @@ TEST_CASE("UpdateProcess::DevelopPlan") {
                         if (pl == 0) {
                             pf.location = ProvidingLocation::Local;     //Inplace must be set of DevelopPlan
                             pf.zipPath = tf.zipPath;
-                            pf.filename = tf.fhFilename;
+                            pf.filename = tf.filename;
                         }
                         else if (pl == 1) {
                             pf.location = ProvidingLocation::Local;
@@ -450,7 +450,7 @@ TEST_CASE("UpdateProcess::DevelopPlan") {
 
             for (int i = 0; i < update.MatchCount(); i++) {
                 UpdateProcess::Match match = update.GetMatch(i);
-                const MatchAnswer &answer = correctMatching[t][match.target->fhFilename];
+                const MatchAnswer &answer = correctMatching[t][match.target->filename];
                 if (answer.filenames.empty())
                     CHECK(match.provided == nullptr);
                 else {

@@ -61,22 +61,21 @@ enum class ProvidingLocation {
  * without having to download the actual provided files.
  */
 struct ProvidedFile {
+    //file/url path to the zip archive containing the file
+    PathAR zipPath;
+    //filename inside zip (for ordering/debugging)
+    std::string filename;
+    //type of file: local/remote
+    ProvidingLocation location;
+    //range of bytes in the zip representing the file
+    //note: local file header INcluded
+    uint32_t byterange[2];
+
     //hash of the contents of uncompressed file
     HashDigest contentsHash;
     //hash of the compressed file
     //note: local file header EXcluded
     HashDigest compressedHash;
-
-    //type of file: local/remote
-    ProvidingLocation location;
-    //file/url path to the zip archive containing the file
-    PathAR zipPath;
-    //range of bytes in the zip representing the file
-    //note: local file header INcluded
-    uint32_t byterange[2];
-
-    //filename inside zip (for ordering/debugging)
-    std::string filename;
 
     static bool IsLess_Ini(const ProvidedFile &a, const ProvidedFile &b);
 };
@@ -86,18 +85,13 @@ struct ProvidedFile {
  * All this information must be prepared in packaging process and saved into "target manifest".
  */
 struct TargetFile {
-    //hash of the contents of uncompressed file
-    HashDigest contentsHash;
-    //hash of the compressed file
-    //note: local file header EXcluded
-    HashDigest compressedHash;
-
     //path to the zip archive (i.e. where it must be)
     PathAR zipPath;
-
+    //filename inside zip (stored in file header too)
+    std::string filename;
     //name of the target package it belongs to
     //"target package" = a set of files which must be installed (several packages may be chosen)
-    std::string packageName;
+    std::string package;
 
     //(contents of zip file central header follows)
     //  version made by                 2 bytes  (minizip: 0)
@@ -120,8 +114,6 @@ struct TargetFile {
     //  extra field (variable size)     ***      (minizip: empty)
     //  file comment (variable size)    ***      (minizip: empty)
 
-    //filename inside zip
-    std::string fhFilename;
     //last modification time in DOS format
     uint32_t fhLastModTime;
     //compression method
@@ -132,12 +124,19 @@ struct TargetFile {
     uint16_t fhInternalAttribs;
     //external attributes
     uint32_t fhExternalAttribs;
-
     //size of compressed file (excessive)
     //note: local file header EXcluded
     uint32_t fhCompressedSize;
-    //size of uncompressed file (excessive)
+    //size of uncompressed file (needed when writing in RAW mode)
     uint32_t fhContentsSize;
+    //CRC32 checksum of uncompressed file (needed when writing in RAW mode)
+    uint32_t fhCrc32;
+
+    //hash of the contents of uncompressed file
+    HashDigest contentsHash;
+    //hash of the compressed file
+    //note: local file header EXcluded
+    HashDigest compressedHash;
 
     static bool IsLess_Ini(const TargetFile &a, const TargetFile &b);
 };

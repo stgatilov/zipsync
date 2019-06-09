@@ -160,7 +160,8 @@ void AnalyzeCurrentFile(unzFile zf, ProvidedFile &provided, TargetFile &target) 
     TdmSyncAssertF((info.flag & 0x08) == 0, "File %s has data descriptor (not supported)", filename);
     TdmSyncAssertF(info.size_file_extra == 0, "File %s has extra field in header (not supported)", filename);
 
-    target.fhFilename = provided.filename = filename;
+    target.filename = provided.filename = filename;
+    target.fhCrc32 = info.crc;
     target.fhCompressedSize = info.compressed_size;
     target.fhContentsSize = info.uncompressed_size;
     target.fhCompressionMethod = info.compression_method;
@@ -228,7 +229,7 @@ void AppendManifestsFromLocalZip(
         pf.zipPath = zipPath;
         providMani.AppendFile(pf);
         tf.zipPath = zipPath;
-        tf.packageName = packageName;
+        tf.package = packageName;
         targetMani.AppendFile(tf);
 
         int err = unzGoToNextFile(zf);
@@ -253,7 +254,7 @@ bool ProvidedFile::IsLess_Ini(const ProvidedFile &a, const ProvidedFile &b) {
     return std::tie(a.zipPath.rel, a.filename, a.contentsHash) < std::tie(b.zipPath.rel, b.filename, b.contentsHash);
 }
 bool TargetFile::IsLess_Ini(const TargetFile &a, const TargetFile &b) {
-    return std::tie(a.packageName, a.zipPath.rel, a.fhFilename, a.contentsHash) < std::tie(b.packageName, b.zipPath.rel, b.fhFilename, b.contentsHash);
+    return std::tie(a.package, a.zipPath.rel, a.filename, a.contentsHash) < std::tie(b.package, b.zipPath.rel, b.filename, b.contentsHash);
 }
 
 IniData ProvidingManifest::WriteToIni() const {
@@ -272,7 +273,7 @@ IniData ProvidingManifest::WriteToIni() const {
         section.push_back(std::make_pair("compressedHash", pf->compressedHash.Hex()));
         section.push_back(std::make_pair("byterange", std::to_string(pf->byterange[0]) + "-" + std::to_string(pf->byterange[1])));
 
-        std::string secName = pf->zipPath.rel + "||" + pf->filename;
+        std::string secName = "File " + pf->zipPath.rel + "||" + pf->filename;
         ini.push_back(std::make_pair(secName, std::move(section)));
     }
 
@@ -285,7 +286,11 @@ void ProvidingManifest::ReadFromIni(const IniData &data, const std::string &root
         ProvidedFile pf;
         pf.location = location;
 
-        const std::string &name = pNS.first;
+        std::string name = pNS.first;
+        if (!stdext::starts_with(name, "File "))
+            continue;
+        name = name.substr(5);
+
         size_t pos = name.find("||");
         TdmSyncAssertF(pos != std::string::npos, "Section name does not specify a file: %s", name.c_str());
         pf.zipPath = PathAR::FromRel(name.substr(0, pos), rootDir);
@@ -318,9 +323,10 @@ IniData TargetManifest::WriteToIni() const {
     IniData ini;
     for (const TargetFile *tf : order) {
         IniSect section;
-        section.push_back(std::make_pair("package", tf->packageName));
+        section.push_back(std::make_pair("package", tf->package));
         section.push_back(std::make_pair("contentsHash", tf->contentsHash.Hex()));
         section.push_back(std::make_pair("compressedHash", tf->compressedHash.Hex()));
+        section.push_back(std::make_pair("crc32", std::to_string(tf->fhCrc32)));
         section.push_back(std::make_pair("lastModTime", std::to_string(tf->fhLastModTime)));
         section.push_back(std::make_pair("compressionMethod", std::to_string(tf->fhCompressionMethod)));
         section.push_back(std::make_pair("gpbitFlag", std::to_string(tf->fhGeneralPurposeBitFlag)));
@@ -329,7 +335,7 @@ IniData TargetManifest::WriteToIni() const {
         section.push_back(std::make_pair("internalAttribs", std::to_string(tf->fhInternalAttribs)));
         section.push_back(std::make_pair("externalAttribs", std::to_string(tf->fhExternalAttribs)));
 
-        std::string secName = tf->zipPath.rel + "||" + tf->fhFilename;
+        std::string secName = "File " + tf->zipPath.rel + "||" + tf->filename;
         ini.push_back(std::make_pair(secName, std::move(section)));
     }
 
@@ -339,14 +345,18 @@ void TargetManifest::ReadFromIni(const IniData &data, const std::string &rootDir
     for (const auto &pNS : data) {
         TargetFile tf;
 
-        const std::string &name = pNS.first;
+        std::string name = pNS.first;
+        if (!stdext::starts_with(name, "File "))
+            continue;
+        name = name.substr(5);
+
         size_t pos = name.find("||");
         TdmSyncAssertF(pos != std::string::npos, "Section name does not specify a file: %s", name.c_str());
         tf.zipPath = PathAR::FromRel(name.substr(0, pos), rootDir);
-        tf.fhFilename = name.substr(pos + 2);
+        tf.filename = name.substr(pos + 2);
 
         std::map<std::string, std::string> dict(pNS.second.begin(), pNS.second.end());
-        tf.packageName = dict.at("package");
+        tf.package = dict.at("package");
         tf.contentsHash.Parse(dict.at("contentsHash").c_str());
         tf.compressedHash.Parse(dict.at("compressedHash").c_str());
 
@@ -389,7 +399,7 @@ bool UpdateProcess::DevelopPlan(UpdateType type) {
     std::map<std::string, const TargetFile*> pathToTarget;
     for (int i = 0; i < targetMani.size(); i++) {
         const TargetFile &tf = targetMani[i];
-        std::string fullPath = tf.zipPath.abs + "||" + tf.fhFilename;
+        std::string fullPath = tf.zipPath.abs + "||" + tf.filename;
         auto pib = pathToTarget.insert(std::make_pair(fullPath, &tf));
         TdmSyncAssertF(pib.second, "Duplicate target file at place %s", fullPath.c_str());
     }
