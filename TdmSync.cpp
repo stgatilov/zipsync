@@ -156,9 +156,16 @@ void AnalyzeCurrentFile(unzFile zf, ProvidedFile &provided, TargetFile &target) 
     char filename[32768];
     unz_file_info info;
     SAFE_CALL(unzGetCurrentFileInfo(zf, &info, filename, sizeof(filename), NULL, 0, NULL, 0));
+
+    TdmSyncAssertF(info.version == 0, "File %s has made-by version %d (not supported)", filename, info.version);
     TdmSyncAssertF(info.version_needed == 20, "File %s needs zip version %d (not supported)", filename, info.version_needed);
     TdmSyncAssertF((info.flag & 0x08) == 0, "File %s has data descriptor (not supported)", filename);
+    TdmSyncAssertF((info.flag & 0x01) == 0, "File %s is encrypted (not supported)", filename);
+    TdmSyncAssertF((info.flag & (~0x06)) == 0, "File %s has flags %d (not supported)", filename, info.flag);
+    TdmSyncAssertF(info.compression_method == 0 || info.compression_method == 8, "File %s has compression %d (not supported)", filename, info.compression_method);
     TdmSyncAssertF(info.size_file_extra == 0, "File %s has extra field in header (not supported)", filename);
+    TdmSyncAssertF(info.size_file_comment == 0, "File %s has comment in header (not supported)", filename);
+    TdmSyncAssertF(info.disk_num_start == 0, "File %s has disk nonzero number (not supported)", filename);
 
     target.filename = provided.filename = filename;
     target.fhCrc32 = info.crc;

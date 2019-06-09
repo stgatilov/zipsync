@@ -4,14 +4,17 @@
 
 using namespace TdmSync;
 
+static const char *ZIP = R"(C:/TheDarkMod/darkmod_207/tdm_textures_stone_brick01.pk4)";
 static const char *ROOT = R"(C:/TheDarkMod/darkmod_207)";
+//static const char *ZIP = R"(D:/StevePrograms/tdmsync2/tdmsync2.zip)";
+//static const char *ROOT = R"(D:/StevePrograms/tdmsync2)";
 
 int main() {
     int t_before = clock();
     ProvidingManifest provMani;
     TargetManifest targMani;
     AppendManifestsFromLocalZip(
-        R"(C:/TheDarkMod/darkmod_207/tdm_textures_stone_brick01.pk4)", ROOT,
+        ZIP, ROOT,
         ProvidingLocation::Local, "assets",
         provMani, targMani
     );

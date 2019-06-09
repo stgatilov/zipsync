@@ -96,8 +96,8 @@ struct TargetFile {
     //(contents of zip file central header follows)
     //  version made by                 2 bytes  (minizip: 0)
     //  version needed to extract       2 bytes  (minizip: 20 --- NO zip64!)
-    //  general purpose bit flag        2 bytes  ???
-    //  compression method              2 bytes  ???
+    //  general purpose bit flag        2 bytes  ???  [0|2|4|6]
+    //  compression method              2 bytes  ???  [0|8]
     //  last mod file time              2 bytes  ???
     //  last mod file date              2 bytes  ???
     //  crc-32                          4 bytes  (defined from contents --- checked by minizip)
