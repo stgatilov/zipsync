@@ -166,6 +166,7 @@ void AnalyzeCurrentFile(unzFile zf, ProvidedFile &provided, TargetFile &target) 
     TdmSyncAssertF(info.size_file_extra == 0, "File %s has extra field in header (not supported)", filename);
     TdmSyncAssertF(info.size_file_comment == 0, "File %s has comment in header (not supported)", filename);
     TdmSyncAssertF(info.disk_num_start == 0, "File %s has disk nonzero number (not supported)", filename);
+    //TODO: check that extra field is empty in local file header?...
 
     target.filename = provided.filename = filename;
     target.fhCrc32 = info.crc;

@@ -351,6 +351,73 @@ string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
     }
 }
 
+TEST_CASE("Reject bad zips") {
+    std::string rootDir = GetTempDir().string();
+    stdext::create_directories(stdext::path(rootDir));
+
+    std::string zipPath[128];
+    for (int i = 0; i < 128; i++)
+        zipPath[i] = (GetTempDir() / stdext::path("badzip" + std::to_string(i) + ".zip")).string();
+
+    #define TEST_BEGIN \
+    { \
+        zipFile zf = zipOpen(zipPath[testsCount++].c_str(), 0);
+    #define TEST_END \
+        zipWriteInFileInZip(zf, rootDir.data(), rootDir.size()); \
+        zipCloseFileInZip(zf); \
+        zipClose(zf, NULL); \
+    }
+
+    int testsCount = 0;
+    TEST_BEGIN  //version made by
+        zipOpenNewFileInZip4(zf, "temp.txt", NULL, NULL, 0, NULL, 0, NULL, Z_DEFLATED, Z_BEST_SPEED, 0, -MAX_WBITS, DEF_MEM_LEVEL, Z_DEFAULT_STRATEGY, NULL, 0, 63, 0);
+    TEST_END
+    TEST_BEGIN  //flags
+        zipOpenNewFileInZip4(zf, "temp.txt", NULL, NULL, 0, NULL, 0, NULL, Z_DEFLATED, Z_BEST_SPEED, 0, -MAX_WBITS, DEF_MEM_LEVEL, Z_DEFAULT_STRATEGY, NULL, 0, 0, 8);
+    TEST_END
+    TEST_BEGIN  //flags
+        zipOpenNewFileInZip4(zf, "temp.txt", NULL, NULL, 0, NULL, 0, NULL, Z_DEFLATED, Z_BEST_SPEED, 0, -MAX_WBITS, DEF_MEM_LEVEL, Z_DEFAULT_STRATEGY, NULL, 0, 0, 16);
+    TEST_END
+    TEST_BEGIN  //flags (encrypted)
+        zipOpenNewFileInZip4(zf, "temp.txt", NULL, NULL, 0, NULL, 0, NULL, Z_DEFLATED, Z_BEST_SPEED, 0, -MAX_WBITS, DEF_MEM_LEVEL, Z_DEFAULT_STRATEGY, "password", 0, 0, 0);
+    TEST_END
+    TEST_BEGIN  //extra field (global)
+        const char extra_field[] = "extra_field";
+        zipOpenNewFileInZip4(zf, "temp.txt", NULL, NULL, 0, extra_field, strlen(extra_field), NULL, Z_DEFLATED, Z_BEST_SPEED, 0, -MAX_WBITS, DEF_MEM_LEVEL, Z_DEFAULT_STRATEGY, NULL, 0, 0, 0);
+    TEST_END
+#if 0   //not verified yet: minizip ignores it
+    TEST_BEGIN //extra field (local)
+        const char extra_field[] = "extra_field";
+        zipOpenNewFileInZip4(zf, "temp.txt", NULL, extra_field, strlen(extra_field), NULL, 0, NULL, Z_DEFLATED, Z_BEST_SPEED, 0, -MAX_WBITS, DEF_MEM_LEVEL, Z_DEFAULT_STRATEGY, NULL, 0, 0, 0);
+    TEST_END
+#endif
+    TEST_BEGIN  //comment
+        zipOpenNewFileInZip4(zf, "temp.txt", NULL, NULL, 0, NULL, 0, "comment", Z_DEFLATED, Z_BEST_SPEED, 0, -MAX_WBITS, DEF_MEM_LEVEL, Z_DEFAULT_STRATEGY, NULL, 0, 0, 0);
+    TEST_END
+    {           //crc
+        zipFile zf = zipOpen(zipPath[testsCount++].c_str(), 0);
+        zipOpenNewFileInZip4(zf, "temp.txt", NULL, NULL, 0, NULL, 0, NULL, 0, 0, 1, -MAX_WBITS, DEF_MEM_LEVEL, Z_DEFAULT_STRATEGY, NULL, 0, 0, 0);
+        zipWriteInFileInZip(zf, rootDir.data(), rootDir.size());
+        zipCloseFileInZipRaw(zf, rootDir.size(), 0xDEADBEEF);
+        zipClose(zf, NULL);
+    }
+    {           //uncompressed size
+        zipFile zf = zipOpen(zipPath[testsCount++].c_str(), 0);
+        zipOpenNewFileInZip4(zf, "temp.txt", NULL, NULL, 0, NULL, 0, NULL, 0, 0, 1, -MAX_WBITS, DEF_MEM_LEVEL, Z_DEFAULT_STRATEGY, NULL, 0, 0, 0);
+        zipCloseFileInZipRaw(zf, 123456789, 0);
+        zipClose(zf, NULL);
+    }
+    //TODO: check other cases (which cannot be generated with minizip) ?
+
+    #undef TEST_BEGIN
+    #undef TEST_END
+
+    for (int i = 0; i < testsCount; i++) {
+        CHECK_THROWS(ProvidingManifest().AppendLocalZip(zipPath[i], rootDir));
+        CHECK_THROWS(TargetManifest().AppendLocalZip(zipPath[i], rootDir, "?"));
+    }
+}
+
 TEST_CASE("UpdateProcess::DevelopPlan") {
     ProvidingManifest providing;
     TargetManifest target;
