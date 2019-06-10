@@ -257,19 +257,12 @@ private:
     //the best matching provided file for every target file
     std::vector<Match> matches;
 
-    //the manifest containing provided files created by repacking process
-    //note: "compressedHash" may be incorrect for these files!
-    ProvidingManifest repackedMani;
-
 public:
     //must be called prior to any usage of an instance
     void Init(TargetManifest &&targetMani, ProvidingManifest &&providingMani, const std::string &rootDir);
 
     //decide how to execute the update (which files to find where)
     bool DevelopPlan(UpdateType type);
-
-    int MatchCount() const { return matches.size(); }
-    const Match &GetMatch(int idx) const { return matches[idx]; }
 
     void DownloadRemoteFiles(const std::string &downloadDir);
 
@@ -278,6 +271,14 @@ public:
     void RepackZips();
 
     void RemoveOldZips(const LocalCache *cache);
+
+
+
+    int MatchCount() const { return matches.size(); }
+    const Match &GetMatch(int idx) const { return matches[idx]; }
+
+private:
+    void ValidateFile(const TargetFile &want, const TargetFile &have) const;
 };
 
 }

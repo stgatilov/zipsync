@@ -203,7 +203,13 @@ void unzGetCurrentFilePosition(unzFile zf, uint32_t *localHeaderStart, uint32_t 
     SAFE_CALL(unzCloseCurrentFile(zf));
 }
 
-void AnalyzeCurrentFile(unzFile zf, ProvidedFile &provided, TargetFile &target) {
+//sets all properties except for:
+//  PT: "zipPath"
+//  P: "location"
+//  T: "package"
+//  PT: "contentsHash" (if hashContents = false)
+//  PT: "compressedHash" (if hashCompressed = false)
+void AnalyzeCurrentFile(unzFile zf, ProvidedFile &provided, TargetFile &target, bool hashContents = true, bool hashCompressed = true) {
     char filename[SIZE_PATH];
     unz_file_info info;
     SAFE_CALL(unzGetCurrentFileInfo(zf, &info, filename, sizeof(filename), NULL, 0, NULL, 0));
@@ -231,6 +237,8 @@ void AnalyzeCurrentFile(unzFile zf, ProvidedFile &provided, TargetFile &target) 
     unzGetCurrentFilePosition(zf, &provided.byterange[0], NULL, &provided.byterange[1]);
 
     for (int mode = 0; mode < 2; mode++) {
+        if (!(mode == 0 ? hashContents : hashCompressed))
+            continue;
         SAFE_CALL(unzOpenCurrentFile2(zf, NULL, NULL, !mode));
 
         blake2s_state blake;
@@ -276,13 +284,13 @@ void AppendManifestsFromLocalZip(
     while (1) {
         ProvidedFile pf;
         TargetFile tf;
+        pf.zipPath = tf.zipPath = zipPath;
+        pf.location = location;
+        tf.package = packageName;
+
         AnalyzeCurrentFile(zf, pf, tf);
 
-        pf.location = location;
-        pf.zipPath = zipPath;
         providMani.AppendFile(pf);
-        tf.zipPath = zipPath;
-        tf.package = packageName;
         targetMani.AppendFile(tf);
 
         int err = unzGoToNextFile(zf);
@@ -443,7 +451,6 @@ void UpdateProcess::Init(TargetManifest &&targetMani_, ProvidingManifest &&provi
 
     updateType = (UpdateType)0xDDDDDDDD;
     matches.clear();
-    repackedMani.SetComment("repacked");
 }
 
 bool UpdateProcess::DevelopPlan(UpdateType type) {
@@ -509,6 +516,25 @@ bool UpdateProcess::DevelopPlan(UpdateType type) {
     return fullPlan;
 }
 
+void UpdateProcess::ValidateFile(const TargetFile &want, const TargetFile &have) const {
+    std::string fullPath = GetFullPath(have.zipPath.abs, have.filename);
+    //zipPath is different while repacking
+    //package does not need to be checked
+    TdmSyncAssertF(want.filename == have.filename, "Wrong filename of %s after repack: need %s", fullPath.c_str(), want.filename.c_str());
+    TdmSyncAssertF(want.contentsHash == have.contentsHash, "Wrong contents hash of %s after repack", fullPath.c_str());
+    TdmSyncAssertF(want.fhContentsSize == have.fhContentsSize, "Wrong contents size of %s after repack", fullPath.c_str());
+    TdmSyncAssertF(want.fhCrc32 == have.fhCrc32, "Wrong crc32 of %s after repack", fullPath.c_str());
+    if (updateType == UpdateType::SameCompressed) {
+        TdmSyncAssertF(want.compressedHash == have.compressedHash, "Wrong compressed hash of %s after repack", fullPath.c_str());
+        TdmSyncAssertF(want.fhCompressedSize == have.fhCompressedSize, "Wrong compressed size of %s after repack", fullPath.c_str());
+    }
+    TdmSyncAssertF(want.fhCompressionMethod == have.fhCompressionMethod, "Wrong compression method of %s after repack", fullPath.c_str());
+    TdmSyncAssertF(want.fhGeneralPurposeBitFlag == have.fhGeneralPurposeBitFlag, "Wrong flags of %s after repack", fullPath.c_str());
+    TdmSyncAssertF(want.fhLastModTime == have.fhLastModTime, "Wrong modification time of %s after repack", fullPath.c_str());
+    TdmSyncAssertF(want.fhInternalAttribs == have.fhInternalAttribs, "Wrong internal attribs of %s after repack", fullPath.c_str());
+    TdmSyncAssertF(want.fhExternalAttribs == have.fhExternalAttribs, "Wrong external attribs of %s after repack", fullPath.c_str());
+}
+
 void UpdateProcess::RepackZips() {
     //verify that we are ready to do repacking
     TdmSyncAssertF(matches.size() == targetMani.size(), "RepackZips: DevelopPlan not called yet");
@@ -556,6 +582,7 @@ void UpdateProcess::RepackZips() {
 
 
     //iterate over all zips and repack them
+    std::map<int, ProvidedFile> matchIdToRepacked;
     for (const auto &pZV : zipToMatchIds) {
         const std::string &zipPath = pZV.first;
         const std::vector<int> &matchIds = pZV.second;
@@ -565,6 +592,7 @@ void UpdateProcess::RepackZips() {
         zipFileHolder zfOut(zipPathOut.c_str());
 
         //copy all files one-by-one
+        std::map<int, bool> copiedRaw;
         for (int midx : matchIds) {
             Match m = matches[midx];
 
@@ -622,43 +650,60 @@ void UpdateProcess::RepackZips() {
             }
             SAFE_CALL(useRaw ? zipCloseFileInZipRaw(zfOut, m.target->fhContentsSize, m.target->fhCrc32) : zipCloseFileInZip(zfOut));
             SAFE_CALL(unzCloseCurrentFile(zf));
+
+            copiedRaw[midx] = useRaw;
         }
         //flush and close new zip
         zfOut.reset();
 
-        //analyze the repacked file
-        repackedMani.Clear();
-        ProvidingManifest &newProvidingMani = repackedMani;
+#if 1
+        //analyze the repacked file (fast)
+        unzFileHolder zf(zipPathOut.c_str());
+        SAFE_CALL(unzGoToFirstFile(zf));
+        for (int i = 0; i < matchIds.size(); i++) {
+            int midx = matchIds[i];
+            Match m = matches[midx];
+            if (i > 0) SAFE_CALL(unzGoToNextFile(zf));
+
+            bool needsRehashCompressed = !copiedRaw[midx];
+            TargetFile targetNew;
+            ProvidedFile providedNew;
+            providedNew.zipPath = targetNew.zipPath = PathAR::FromAbs(zipPathOut, rootDir);
+            providedNew.location = ProvidingLocation::Local;
+            targetNew.package = "[repacked]";
+            providedNew.contentsHash = targetNew.contentsHash = m.target->contentsHash;
+            providedNew.compressedHash = targetNew.compressedHash = m.target->compressedHash;   //will be recomputed if needsRehashCompressed
+            AnalyzeCurrentFile(zf, providedNew, targetNew, false, needsRehashCompressed);
+
+            ValidateFile(*m.target, targetNew);
+            matchIdToRepacked[midx] = providedNew;
+        }
+        zf.reset();
+#else
+        //analyze the repacked file (slow)
+        ProvidingManifest newProvidingMani;
         TargetManifest newTargetMani;
         AppendManifestsFromLocalZip(zipPathOut, rootDir, ProvidingLocation::Local, "[repacked]", newProvidingMani, newTargetMani);
         for (int i = 0; i < matchIds.size(); i++) {
             int midx = matchIds[i];
-            Match &m = matches[midx];
-            const TargetFile *want = m.target, *have = &newTargetMani[i];
-            std::string fullPath = GetFullPath(have->zipPath.abs, have->filename);
+            Match m = matches[midx];
 
-            //verify everything we can =)
-            TdmSyncAssertF(want->filename == have->filename, "Wrong filename of %s after repack: need %s", fullPath.c_str(), want->filename.c_str());
-            TdmSyncAssertF(want->contentsHash == have->contentsHash, "Wrong contents hash of %s after repack", fullPath.c_str());
-            TdmSyncAssertF(want->fhContentsSize == have->fhContentsSize, "Wrong contents size of %s after repack", fullPath.c_str());
-            TdmSyncAssertF(want->fhCrc32 == have->fhCrc32, "Wrong crc32 of %s after repack", fullPath.c_str());
-            if (updateType == UpdateType::SameCompressed) {
-                TdmSyncAssertF(want->compressedHash == have->compressedHash, "Wrong compressed hash of %s after repack", fullPath.c_str());
-                TdmSyncAssertF(want->fhCompressedSize == have->fhCompressedSize, "Wrong compressed size of %s after repack", fullPath.c_str());
-            }
-            TdmSyncAssertF(want->fhCompressionMethod == have->fhCompressionMethod, "Wrong compression method of %s after repack", fullPath.c_str());
-            TdmSyncAssertF(want->fhGeneralPurposeBitFlag == have->fhGeneralPurposeBitFlag, "Wrong flags of %s after repack", fullPath.c_str());
-            TdmSyncAssertF(want->fhLastModTime == have->fhLastModTime, "Wrong modification time of %s after repack", fullPath.c_str());
-            TdmSyncAssertF(want->fhInternalAttribs == have->fhInternalAttribs, "Wrong internal attribs of %s after repack", fullPath.c_str());
-            TdmSyncAssertF(want->fhExternalAttribs == have->fhExternalAttribs, "Wrong external attribs of %s after repack", fullPath.c_str());
-
-            //change match: now it points to the repacked file
-            TdmSyncAssert(repackedMani[i].filename == have->filename);  //by construction
-            m.provided = &repackedMani[i];
+            ValidateFile(*m.target, newTargetMani[i]);
+            //remember that where this match was repacked to
+            TdmSyncAssert(newProvidingMani[i].filename == newTargetMani[i].filename);  //by construction
+            matchIdToRepacked[midx] = newProvidingMani[i];
         }
+#endif
 
         //TODO: remove?
     }
+
+    /*//change provided file in all repacked matches
+    for (const auto &pIP : matchIdToRepacked) {
+        Match &m = matches[pIP.first];
+
+    }*/
+
 }
 
 }
