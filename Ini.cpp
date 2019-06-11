@@ -1,9 +1,13 @@
 #include "Ini.h"
+#include "Utils.h"
+#include "StdString.h"
+#include "tsassert.h"
+
 
 namespace TdmSync {
 
 void WriteIniFile(const char *path, const IniData &data) {
-    stdioFileHolder f(path, "wb");
+    StdioFileHolder f(path, "wb");
     for (const auto &pNS : data) {
         fprintf(f, "[%s]\n", pNS.first.c_str());
         for (const auto &pKV : pNS.second)
@@ -13,7 +17,7 @@ void WriteIniFile(const char *path, const IniData &data) {
 }
 IniData ReadIniFile(const char *path) {
     char buffer[SIZE_LINEBUFFER];
-    stdioFileHolder f(path, "rb");
+    StdioFileHolder f(path, "rb");
     IniData ini;
     IniSect sec;
     std::string name;
