@@ -167,6 +167,7 @@ public:
     ProvidedFile &operator[](int index) { return files[index]; }
 
     void Clear() { files.clear(); }
+    void Reserve(int num) { files.reserve(num); }
     void AppendFile(const ProvidedFile &file) { files.push_back(file); }
     void AppendManifest(const ProvidingManifest &other) { AppendVector(files, other.files); }
     void AppendLocalZip(const std::string &zipPath, const std::string &rootDir);
@@ -256,6 +257,11 @@ private:
 
     //the best matching provided file for every target file
     std::vector<Match> matches;
+
+    //the manifest containing provided files created by repacking process
+    ProvidingManifest repackedMani;
+    //the manifest containing no-longer-needed files from target zips
+    ProvidingManifest removedMani;
 
 public:
     //must be called prior to any usage of an instance

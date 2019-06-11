@@ -535,6 +535,17 @@ void UpdateProcess::ValidateFile(const TargetFile &want, const TargetFile &have)
     TdmSyncAssertF(want.fhExternalAttribs == have.fhExternalAttribs, "Wrong external attribs of %s after repack", fullPath.c_str());
 }
 
+int CompressionLevelFromGpFlags(int flags) {
+    int compressionLevel = Z_DEFAULT_COMPRESSION;
+    if (flags == 2)
+        compressionLevel = Z_BEST_COMPRESSION;  //minizip: 8,9
+    if (flags == 4)
+        compressionLevel = 2;                   //minizip: 2
+    if (flags == 6)
+        compressionLevel = Z_BEST_SPEED;        //minizip: 1
+    return compressionLevel;
+}
+
 void UpdateProcess::RepackZips() {
     //verify that we are ready to do repacking
     TdmSyncAssertF(matches.size() == targetMani.size(), "RepackZips: DevelopPlan not called yet");
@@ -580,9 +591,24 @@ void UpdateProcess::RepackZips() {
     for (const std::string zipfn : zipsDontChange)
         zipToMatchIds.erase(zipfn);
 
+    //TODO: handle case when downloaded zip fits target zip perfectly
+
+    //prepare manifest for repacked files
+    repackedMani.Clear();
+    removedMani.Clear();
+    //note: this is needed because of our reliance of std::vector-by-value =(
+    repackedMani.Reserve(targetMani.size());
+
+    //check how many provided files are used from every zip
+    std::map<std::string, int> zipToMatchCnt;
+    for (const auto &pZV : zipToMatchIds)
+        for (int midx : pZV.second) {
+            Match m = matches[midx];
+            zipToMatchCnt[m.provided->zipPath.abs]++;
+        }
+
 
     //iterate over all zips and repack them
-    std::map<int, ProvidedFile> matchIdToRepacked;
     for (const auto &pZV : zipToMatchIds) {
         const std::string &zipPath = pZV.first;
         const std::vector<int> &matchIds = pZV.second;
@@ -627,13 +653,7 @@ void UpdateProcess::RepackZips() {
             infoOut.dosDate = m.target->fhLastModTime;
             infoOut.internal_fa = m.target->fhInternalAttribs;
             infoOut.external_fa = m.target->fhExternalAttribs;
-            int compressionLevel = Z_DEFAULT_COMPRESSION;
-            if (m.target->fhGeneralPurposeBitFlag == 2)
-                compressionLevel = Z_BEST_COMPRESSION;  //minizip: 8,9
-            if (m.target->fhGeneralPurposeBitFlag == 4)
-                compressionLevel = 2;                   //minizip: 2
-            if (m.target->fhGeneralPurposeBitFlag == 6)
-                compressionLevel = Z_BEST_SPEED;        //minizip: 1
+            int compressionLevel = CompressionLevelFromGpFlags(m.target->fhGeneralPurposeBitFlag);
 
             //copy provided file data into target file
             SAFE_CALL(unzOpenCurrentFile2(zf, NULL, NULL, useRaw));
@@ -656,15 +676,15 @@ void UpdateProcess::RepackZips() {
         //flush and close new zip
         zfOut.reset();
 
-#if 1
-        //analyze the repacked file (fast)
+        //analyze the repacked new zip
         unzFileHolder zf(zipPathOut.c_str());
         SAFE_CALL(unzGoToFirstFile(zf));
         for (int i = 0; i < matchIds.size(); i++) {
             int midx = matchIds[i];
-            Match m = matches[midx];
+            Match &m = matches[midx];
             if (i > 0) SAFE_CALL(unzGoToNextFile(zf));
 
+            //analyze current file
             bool needsRehashCompressed = !copiedRaw[midx];
             TargetFile targetNew;
             ProvidedFile providedNew;
@@ -674,35 +694,65 @@ void UpdateProcess::RepackZips() {
             providedNew.contentsHash = targetNew.contentsHash = m.target->contentsHash;
             providedNew.compressedHash = targetNew.compressedHash = m.target->compressedHash;   //will be recomputed if needsRehashCompressed
             AnalyzeCurrentFile(zf, providedNew, targetNew, false, needsRehashCompressed);
-
+            //check that it indeed matches the target
             ValidateFile(*m.target, targetNew);
-            matchIdToRepacked[midx] = providedNew;
+
+            //add info about file to special manifest
+            repackedMani.AppendFile(providedNew);
+            //switch the match for the target file to this new file
+            zipToMatchCnt[m.provided->zipPath.abs]--;
+            m.provided = &repackedMani[repackedMani.size() - 1];
         }
         zf.reset();
-#else
-        //analyze the repacked file (slow)
-        ProvidingManifest newProvidingMani;
-        TargetManifest newTargetMani;
-        AppendManifestsFromLocalZip(zipPathOut, rootDir, ProvidingLocation::Local, "[repacked]", newProvidingMani, newTargetMani);
-        for (int i = 0; i < matchIds.size(); i++) {
-            int midx = matchIds[i];
-            Match m = matches[midx];
 
-            ValidateFile(*m.target, newTargetMani[i]);
-            //remember that where this match was repacked to
-            TdmSyncAssert(newProvidingMani[i].filename == newTargetMani[i].filename);  //by construction
-            matchIdToRepacked[midx] = newProvidingMani[i];
+        //see which target zip-s have contents no longer needed
+        for (const auto &pZV : zipToMatchIds) {
+            const std::string &zipPath = pZV.first;
+            auto iter = zipToMatchCnt.find(zipPath);
+            if (iter == zipToMatchCnt.end())
+                continue;
+            TdmSyncAssert(iter->second >= 0);
+            if (iter->second > 0)
+                continue;
+
+            //this is a target zip and its contents are no longer needed anywhere
+            zipToMatchCnt.erase(iter);
+            const std::vector<const ProvidedFile*> &providedFiles = zipToProvided[zipPath];
+
+            std::string zipPathOut = PathAR::PrefixFile(zipPath, "__removed__");
+            unzFileHolder zf(zipPath.c_str());
+            zipFileHolder zfOut(zipPathOut.c_str());
+
+            //go over files and copy ??? one-by-one
+            SAFE_CALL(unzGoToFirstFile(zf));
+            while (1) {
+                SAFE_CALL(unzOpenCurrentFile2(zf, NULL, NULL, true));
+                unz_file_info info;
+                char filename[SIZE_PATH];
+                SAFE_CALL(unzGetCurrentFileInfo(zf, &info, filename, sizeof(filename), NULL, 0, NULL, 0));
+                zip_fileinfo infoOut;
+                infoOut.dosDate = info.dosDate;
+                infoOut.internal_fa = info.internal_fa;
+                infoOut.external_fa = info.external_fa;
+                SAFE_CALL(zipOpenNewFileInZip2(zfOut, filename, &infoOut, NULL, 0, NULL, 0, NULL, info.compression_method, CompressionLevelFromGpFlags(info.flag), true));
+                while (1) {
+                    char buffer[SIZE_FILEBUFFER];
+                    int bytes = unzReadCurrentFile(zf, buffer, sizeof(buffer));
+                    if (bytes < 0)
+                        SAFE_CALL(bytes);
+                    if (bytes == 0)
+                        break;
+                    SAFE_CALL(zipWriteInFileInZip(zfOut, buffer, bytes));
+                }
+                int res = unzGoToNextFile(zf);
+                if (res == UNZ_END_OF_LIST_OF_FILE)
+                    break;
+                SAFE_CALL(res);
+            }
+
+            removedMani
         }
-#endif
-
-        //TODO: remove?
     }
-
-    /*//change provided file in all repacked matches
-    for (const auto &pIP : matchIdToRepacked) {
-        Match &m = matches[pIP.first];
-
-    }*/
 
 }
 
