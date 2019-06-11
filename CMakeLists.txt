@@ -7,19 +7,32 @@ conan_basic_setup()
 set(CMAKE_CONFIGURATION_TYPES "Debug;RelWithDebInfo" CACHE STRING "" FORCE)
 
 set(sources
+    minizip_extra.c
+    minizip_extra.h
+    minizip_private.h
+
     tsassert.h
     tsassert.cpp
-    TdmSync.h
-    TdmSync.cpp
 
     StdFilesystem.cpp
     StdFilesystem.h
     StdString.cpp
     StdString.h
 
-    minizip_extra.c
-    minizip_extra.h
-    minizip_private.h
+    Ini.h
+    Ini.cpp
+    Hash.h
+    Hash.cpp
+    Path.h
+    Path.cpp
+    Utils.h
+    Utils.cpp
+    ZipUtils.h
+    ZipUtils.cpp
+    Manifest.h
+    Manifest.cpp
+    TdmSync.h
+    TdmSync.cpp
 )
 
 set(tests_sources
