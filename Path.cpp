@@ -1,4 +1,9 @@
 #include "Path.h"
+#include "tsassert.h"
+#include "StdString.h"
+
+
+namespace TdmSync {
 
 bool PathAR::IsHttp(const std::string &path) {
     return stdext::starts_with(path, "http://");
@@ -49,7 +54,7 @@ void ParseFullPath(const std::string &fullPath, std::string &zipPath, std::strin
     filename = fullPath.substr(pos + 2);
 }
 
-std::string PathAR::PrefixFile(std::string absPath, std::string prefix) {
+std::string PrefixFile(std::string absPath, std::string prefix) {
     size_t pos = absPath.find_last_of('/');
     if (pos != std::string::npos)
         pos++;
@@ -57,4 +62,6 @@ std::string PathAR::PrefixFile(std::string absPath, std::string prefix) {
         pos = 0;
     absPath.insert(absPath.begin() + pos, prefix.begin(), prefix.end());
     return absPath;
+}
+
 }

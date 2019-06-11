@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 namespace TdmSync {
 
 /**
@@ -14,8 +16,8 @@ struct PathAR {
 
     static PathAR FromAbs(std::string absPath, std::string rootDir);
     static PathAR FromRel(std::string relPath, std::string rootDir);
-
-    static std::string PrefixFile(std::string absPath, std::string prefix);
 };
+
+std::string PrefixFile(std::string absPath, std::string prefix);
 
 }
