@@ -343,9 +343,8 @@ string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
         CHECK(*(int*)&fdata[0] == 0x04034b50);   //local file header signature
         CHECK(memcmp(&fdata[30], target[i].filename.c_str(), target[i].filename.size()) == 0);
 
-        HashDigest digest;
         int offs = fdata.size() - target[i].fhCompressedSize, sz = target[i].fhCompressedSize;
-        blake2s(digest.data, sizeof(digest), fdata.data() + offs, sz, NULL, 0);
+        HashDigest digest = Hasher().Update(fdata.data() + offs, sz).Finalize();
         CHECK(target[i].compressedHash == digest);
         CHECK(target[i].compressedHash == providing[i].compressedHash);
     }

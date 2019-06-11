@@ -58,8 +58,7 @@ void AnalyzeCurrentFile(unzFile zf, ProvidedFile &provided, TargetFile &target, 
             continue;
         SAFE_CALL(unzOpenCurrentFile2(zf, NULL, NULL, !mode));
 
-        blake2s_state blake;
-        blake2s_init(&blake, sizeof(HashDigest));
+        Hasher hasher;
         char buffer[SIZE_FILEBUFFER];
         int processedBytes = 0;
         while (1) {
@@ -68,11 +67,10 @@ void AnalyzeCurrentFile(unzFile zf, ProvidedFile &provided, TargetFile &target, 
                 SAFE_CALL(bytes);
             if (bytes == 0)
                 break;
-            blake2s_update(&blake, buffer, bytes);
+            hasher.Update(buffer, bytes);
             processedBytes += bytes;
         } 
-        HashDigest cmpHash;
-        blake2s_final(&blake, cmpHash.data, sizeof(HashDigest));
+        HashDigest cmpHash = hasher.Finalize();
 
         SAFE_CALL(unzCloseCurrentFile(zf));
 

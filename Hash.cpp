@@ -33,8 +33,9 @@ void HashDigest::Parse(const char *hex) {
 Hasher::Hasher() {
     blake2s_init(&state, sizeof(HashDigest::data));
 }
-void Hasher::Update(const void *in, size_t inlen) {
+Hasher& Hasher::Update(const void *in, size_t inlen) {
     blake2s_update(&state, in, inlen);
+    return *this;
 }
 HashDigest Hasher::Finalize() {
     HashDigest res;

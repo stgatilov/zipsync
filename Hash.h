@@ -34,7 +34,7 @@ class Hasher {
     blake2s_state state;
 public:
     Hasher();
-    void Update(const void *in, size_t inlen);
+    Hasher& Update(const void *in, size_t inlen);
     HashDigest Finalize();
 };
 
