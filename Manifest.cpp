@@ -1,6 +1,30 @@
 #include "Manifest.h"
+#include "tsassert.h"
+#include "StdString.h"
+#include "Utils.h"
+#include "ZipUtils.h"
+#include "Path.h"
+#include <tuple>
+#include <map>
+
+#include "minizip_extra.h"
+
 
 namespace TdmSync {
+
+bool ProvidedFile::IsLess_ZipFn(const ProvidedFile &a, const ProvidedFile &b) {
+    return std::tie(a.zipPath.rel, a.filename, a.contentsHash) < std::tie(b.zipPath.rel, b.filename, b.contentsHash);
+}
+bool TargetFile::IsLess_ZipFn(const TargetFile &a, const TargetFile &b) {
+    return std::tie(a.zipPath.rel, a.filename, a.contentsHash) < std::tie(b.zipPath.rel, b.filename, b.contentsHash);
+}
+bool ProvidedFile::IsLess_Ini(const ProvidedFile &a, const ProvidedFile &b) {
+    return IsLess_ZipFn(a, b);
+}
+bool TargetFile::IsLess_Ini(const TargetFile &a, const TargetFile &b) {
+    return std::tie(a.package, a.zipPath.rel, a.filename, a.contentsHash) < std::tie(b.package, b.zipPath.rel, b.filename, b.contentsHash);
+}
+
 
 //sets all properties except for:
 //  PT: "zipPath"
@@ -77,7 +101,7 @@ void AppendManifestsFromLocalZip(
 ) {
     PathAR zipPath = PathAR::FromAbs(zipPathAbs, rootDir);
 
-    unzFileHolder zf(zipPath.abs.c_str());
+    UnzFileHolder zf(zipPath.abs.c_str());
     TdmSyncAssertF(!unzIsZip64(zf), "Zip64 is not supported!");
     SAFE_CALL(unzGoToFirstFile(zf));
     while (1) {
@@ -109,18 +133,11 @@ void TargetManifest::AppendLocalZip(const std::string &zipPath, const std::strin
     AppendManifestsFromLocalZip(zipPath, rootDir, ProvidingLocation::Inplace, packageName, temp, *this);
 }
 
-
-bool ProvidedFile::IsLess_ZipFn(const ProvidedFile &a, const ProvidedFile &b) {
-    return std::tie(a.zipPath.rel, a.filename, a.contentsHash) < std::tie(b.zipPath.rel, b.filename, b.contentsHash);
+void TargetManifest::AppendManifest(const TargetManifest &other) {
+    AppendVector(files, other.files);
 }
-bool TargetFile::IsLess_ZipFn(const TargetFile &a, const TargetFile &b) {
-    return std::tie(a.zipPath.rel, a.filename, a.contentsHash) < std::tie(b.zipPath.rel, b.filename, b.contentsHash);
-}
-bool ProvidedFile::IsLess_Ini(const ProvidedFile &a, const ProvidedFile &b) {
-    return IsLess_ZipFn(a, b);
-}
-bool TargetFile::IsLess_Ini(const TargetFile &a, const TargetFile &b) {
-    return std::tie(a.package, a.zipPath.rel, a.filename, a.contentsHash) < std::tie(b.package, b.zipPath.rel, b.filename, b.contentsHash);
+void ProvidingManifest::AppendManifest(const ProvidingManifest &other) {
+    AppendVector(files, other.files);
 }
 
 IniData ProvidingManifest::WriteToIni() const {

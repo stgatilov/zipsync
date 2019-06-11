@@ -1,5 +1,12 @@
 #pragma once
 
+#include <stdint.h>
+#include <vector>
+#include "Path.h"
+#include "Hash.h"
+#include "Ini.h"
+
+
 namespace TdmSync {
 
 /**
@@ -124,7 +131,7 @@ public:
     void Clear() { files.clear(); }
     void Reserve(int num) { files.reserve(num); }
     void AppendFile(const ProvidedFile &file) { files.push_back(file); }
-    void AppendManifest(const ProvidingManifest &other) { AppendVector(files, other.files); }
+    void AppendManifest(const ProvidingManifest &other);
     void AppendLocalZip(const std::string &zipPath, const std::string &rootDir);
 
     void ReadFromIni(const IniData &data, const std::string &rootDir);
@@ -154,7 +161,7 @@ public:
     void Clear() { files.clear(); }
     void AppendFile(const TargetFile &file) { files.push_back(file); }
     void AppendLocalZip(const std::string &zipPath, const std::string &rootDir, const std::string &packageName);
-    void AppendManifest(const TargetManifest &other) { AppendVector(files, other.files); }
+    void AppendManifest(const TargetManifest &other);
 
     void ReadFromIni(const IniData &data, const std::string &rootDir);
     IniData WriteToIni() const;

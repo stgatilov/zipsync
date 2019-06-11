@@ -18,6 +18,10 @@ struct PathAR {
     static PathAR FromRel(std::string relPath, std::string rootDir);
 };
 
+/// Append filename with prefix (e.g. "C:/__download__models.pk4" from "C:/models.pk4").
 std::string PrefixFile(std::string absPath, std::string prefix);
+
+std::string GetFullPath(const std::string &zipPath, const std::string &filename);
+void ParseFullPath(const std::string &fullPath, std::string &zipPath, std::string &filename);
 
 }

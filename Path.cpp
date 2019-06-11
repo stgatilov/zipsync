@@ -9,7 +9,6 @@ bool PathAR::IsHttp(const std::string &path) {
     return stdext::starts_with(path, "http://");
 }
 
-
 static void CheckPath(const std::string &path, bool relative) {
     for (int i = 0; i < path.size(); i++)
         TdmSyncAssertF(uint8_t(path[i]) >= 32, "Non-printable character %d in path", int(path[i]));
@@ -20,7 +19,6 @@ static void CheckPath(const std::string &path, bool relative) {
         TdmSyncAssertF(path.find_first_of(":") == std::string::npos, "Colon in relative path %s", path.c_str());
         TdmSyncAssertF(path[0] != '/', "Relative path starts with slash: %s", path.c_str())
     }
-
 }
 
 PathAR PathAR::FromAbs(std::string absPath, std::string rootDir) {
@@ -44,15 +42,6 @@ PathAR PathAR::FromRel(std::string relPath, std::string rootDir) {
     res.abs = rootDir + (lastSlash ? "" : "/") + relPath;
     return res;
 }
-std::string GetFullPath(const std::string &zipPath, const std::string &filename) {
-    return zipPath + "||" + filename;
-}
-void ParseFullPath(const std::string &fullPath, std::string &zipPath, std::string &filename) {
-    size_t pos = fullPath.find("||");
-    TdmSyncAssertF(pos != std::string::npos, "Cannot split fullname into zip path and filename: %s", fullPath.c_str());
-    zipPath = fullPath.substr(0, pos);
-    filename = fullPath.substr(pos + 2);
-}
 
 std::string PrefixFile(std::string absPath, std::string prefix) {
     size_t pos = absPath.find_last_of('/');
@@ -62,6 +51,16 @@ std::string PrefixFile(std::string absPath, std::string prefix) {
         pos = 0;
     absPath.insert(absPath.begin() + pos, prefix.begin(), prefix.end());
     return absPath;
+}
+
+std::string GetFullPath(const std::string &zipPath, const std::string &filename) {
+    return zipPath + "||" + filename;
+}
+void ParseFullPath(const std::string &fullPath, std::string &zipPath, std::string &filename) {
+    size_t pos = fullPath.find("||");
+    TdmSyncAssertF(pos != std::string::npos, "Cannot split fullname into zip path and filename: %s", fullPath.c_str());
+    zipPath = fullPath.substr(0, pos);
+    filename = fullPath.substr(pos + 2);
 }
 
 }
