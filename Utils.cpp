@@ -3,10 +3,10 @@
 
 namespace TdmSync {
 
+StdioFileHolder::~StdioFileHolder()
+{}
 StdioFileHolder::StdioFileHolder(FILE *f)
     : StdioFileUniquePtr(f, fclose)
-{}
-StdioFileHolder::~StdioFileHolder()
 {}
 StdioFileHolder::StdioFileHolder(const char *path, const char *mode)
     : StdioFileUniquePtr(fopen(path, mode), fclose)
