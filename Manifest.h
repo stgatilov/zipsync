@@ -5,6 +5,7 @@
 #include "Path.h"
 #include "Hash.h"
 #include "Ini.h"
+#include "ZipUtils.h"
 
 
 namespace TdmSync {
@@ -169,6 +170,16 @@ public:
     void ReRoot(const std::string &rootDir);
 };
 
+
+//sets all properties except for:
+//  PT: "zipPath"
+//  P: "location"
+//  T: "package"
+//  PT: "contentsHash" (if hashContents = false)
+//  PT: "compressedHash" (if hashCompressed = false)
+void AnalyzeCurrentFile(unzFile zf, ProvidedFile &provided, TargetFile &target, bool hashContents = true, bool hashCompressed = true);
+
+//creates both types of manifest at once (2x faster than creating them separately)
 void AppendManifestsFromLocalZip(
     const std::string &zipPath, const std::string &rootDir,             //path to local zip (both absolute?)
     ProvidingLocation location,                                         //for providing manifest

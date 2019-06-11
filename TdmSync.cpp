@@ -1,19 +1,12 @@
 #include "TdmSync.h"
-#include "StdFilesystem.h"
 #include "StdString.h"
 #include <algorithm>
 #include <map>
 #include <set>
 #include "tsassert.h"
+#include "Utils.h"
+#include "ZipUtils.h"
 
-#include "unzip.h"
-#include "zip.h"
-#include "minizip_extra.h"
-
-//(only for viewing in debugger)
-#include "minizip_private.h"
-
-namespace fs = stdext;
 
 namespace TdmSync {
 
@@ -189,8 +182,8 @@ void UpdateProcess::RepackZips() {
         const std::vector<int> &matchIds = pZV.second;
 
         //create new zip archive (it will contain the results of repacking)
-        std::string zipPathOut = PathAR::PrefixFile(zipPath, "__new__");
-        zipFileHolder zfOut(zipPathOut.c_str());
+        std::string zipPathOut = PrefixFile(zipPath, "__new__");
+        ZipFileHolder zfOut(zipPathOut.c_str());
 
         //copy all files one-by-one
         std::map<int, bool> copiedRaw;
@@ -198,7 +191,7 @@ void UpdateProcess::RepackZips() {
             Match m = matches[midx];
 
             //open provided file for reading (TODO: optimize?)
-            unzFileHolder zf(m.provided->zipPath.abs.c_str());
+            UnzFileHolder zf(m.provided->zipPath.abs.c_str());
             SAFE_CALL(unzGoToFirstFile(zf));
             while (1) {
                 char filename[SIZE_PATH];
@@ -252,7 +245,7 @@ void UpdateProcess::RepackZips() {
         zfOut.reset();
 
         //analyze the repacked new zip
-        unzFileHolder zf(zipPathOut.c_str());
+        UnzFileHolder zf(zipPathOut.c_str());
         SAFE_CALL(unzGoToFirstFile(zf));
         for (int i = 0; i < matchIds.size(); i++) {
             int midx = matchIds[i];
@@ -294,9 +287,9 @@ void UpdateProcess::RepackZips() {
             zipToMatchCnt.erase(iter);
             const std::vector<const ProvidedFile*> &providedFiles = zipToProvided[zipPath];
 
-            std::string zipPathOut = PathAR::PrefixFile(zipPath, "__removed__");
-            unzFileHolder zf(zipPath.c_str());
-            zipFileHolder zfOut(zipPathOut.c_str());
+            std::string zipPathOut = PrefixFile(zipPath, "__removed__");
+            UnzFileHolder zf(zipPath.c_str());
+            ZipFileHolder zfOut(zipPathOut.c_str());
 
             //go over files and copy ??? one-by-one
             SAFE_CALL(unzGoToFirstFile(zf));
@@ -325,7 +318,7 @@ void UpdateProcess::RepackZips() {
                 SAFE_CALL(res);
             }
 
-            removedMani
+            //removedMani
         }
     }
 

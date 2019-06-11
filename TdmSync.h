@@ -1,10 +1,7 @@
 #pragma once
 
-#include <stdint.h>
-#include <string>
-#include <vector>
-#include <map>
-#include "Ini.h"
+#include "Manifest.h"
+
 
 namespace TdmSync {
 

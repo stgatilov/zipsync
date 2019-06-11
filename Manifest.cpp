@@ -26,13 +26,7 @@ bool TargetFile::IsLess_Ini(const TargetFile &a, const TargetFile &b) {
 }
 
 
-//sets all properties except for:
-//  PT: "zipPath"
-//  P: "location"
-//  T: "package"
-//  PT: "contentsHash" (if hashContents = false)
-//  PT: "compressedHash" (if hashCompressed = false)
-void AnalyzeCurrentFile(unzFile zf, ProvidedFile &provided, TargetFile &target, bool hashContents = true, bool hashCompressed = true) {
+void AnalyzeCurrentFile(unzFile zf, ProvidedFile &provided, TargetFile &target, bool hashContents, bool hashCompressed) {
     char filename[SIZE_PATH];
     unz_file_info info;
     SAFE_CALL(unzGetCurrentFileInfo(zf, &info, filename, sizeof(filename), NULL, 0, NULL, 0));
