@@ -1,14 +1,23 @@
 #pragma once
 
+#include <stdint.h>
+#include <string>
+
+#pragma warning(push)
+#pragma warning(disable:4804)  //warning C4804: '/': unsafe use of type 'bool' in operation
+#include "blake2.h"
+#pragma warning(pop)
+
+
 namespace TdmSync {
 
 /**
- * The main hash digest used for all files.
+ * The hash digest used for all files.
  * If two files have same hash value, then they are considered equal (no check required).
  * Thus, a reliable cryptographic hash must be used.
  */
 struct HashDigest {
-    //256-bit BLAKE2s hash  (TODO: use [p]arallel flavor?)
+    //256-bit hash (see Hasher below)
     uint8_t data[32];
 
     bool operator< (const HashDigest &other) const;
@@ -17,6 +26,16 @@ struct HashDigest {
     void Parse(const char *hex);
 };
 
-//TODO: wrapper for BLAKE hash?
+/**
+ * Wrapper around the chosen hash function.
+ * Currently it is BLAKE2s (TODO: use [p]arallel flavor?)
+ */
+class Hasher {
+    blake2s_state state;
+public:
+    Hasher();
+    void Update(const void *in, size_t inlen);
+    HashDigest Finalize();
+};
 
 }

@@ -1,6 +1,8 @@
 #include "Hash.h"
+#include <stdio.h>
+#include <string.h>
+#include "tsassert.h"
 
-#include "blake2.h"
 
 namespace TdmSync {
 
@@ -26,6 +28,18 @@ void HashDigest::Parse(const char *hex) {
         TdmSyncAssertF(k == 1, "Cannot parse hex digest byte %s", octet);
         data[i] = value;
     }
+}
+
+Hasher::Hasher() {
+    blake2s_init(&state, sizeof(HashDigest::data));
+}
+void Hasher::Update(const void *in, size_t inlen) {
+    blake2s_update(&state, in, inlen);
+}
+HashDigest Hasher::Finalize() {
+    HashDigest res;
+    blake2s_final(&state, res.data, sizeof(res.data));
+    return res;
 }
 
 }
