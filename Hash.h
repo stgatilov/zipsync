@@ -16,10 +16,12 @@ namespace TdmSync {
  * If two files have same hash value, then they are considered equal (no check required).
  * Thus, a reliable cryptographic hash must be used.
  */
-struct HashDigest {
+class HashDigest {
     //256-bit hash (see Hasher below)
-    uint8_t data[32];
+    uint8_t _data[32];
 
+    friend class Hasher;
+public:
     bool operator< (const HashDigest &other) const;
     bool operator== (const HashDigest &other) const;
     std::string Hex() const;
@@ -31,7 +33,7 @@ struct HashDigest {
  * Currently it is BLAKE2s (TODO: use [p]arallel flavor?)
  */
 class Hasher {
-    blake2s_state state;
+    blake2s_state _state;
 public:
     Hasher();
     Hasher& Update(const void *in, size_t inlen);

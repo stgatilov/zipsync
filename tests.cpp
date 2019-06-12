@@ -40,9 +40,10 @@ TEST_CASE("PathAR::From[Abs|Rel]") {
 
 HashDigest GenHash(int idx) {
     std::minstd_rand rnd(idx + 0xDEADBEEF);
-    HashDigest res;
-    for (int i = 0; i < sizeof(res.data); i++)
-        res.data[i] = rnd();
+    uint32_t data[8];
+    for (int i = 0; i < 8; i++)
+        data[i] = rnd();
+    HashDigest res = Hasher().Update(data, sizeof(data)).Finalize();
     return res;
 }
 template<class T> const T &Search(const std::vector<std::pair<std::string, T>> &data, const std::string &key) {
