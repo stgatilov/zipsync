@@ -170,6 +170,26 @@ public:
     void ReRoot(const std::string &rootDir);
 };
 
+/**
+ * Iterator to a file in a manifest.
+ * Appends do NOT invalidate it.
+ */
+template<class File, class Manifest> struct IndexIterator {
+    Manifest *manifest;
+    int index;
+
+    IndexIterator() : manifest(nullptr), index(0) {}
+    IndexIterator(Manifest &manifest, int index) : manifest(&manifest), index(index) {}
+    IndexIterator(Manifest &manifest, const File *file) : manifest(&manifest), index(file - &manifest[0]) {
+        TdmSyncAssert(index >= 0 && index < manifest.size());
+    }
+    File& operator*() const { return (*manifest)[index]; }
+    File* operator->() const { return &(*manifest)[index]; }
+    explicit operator bool() const { return manifest != nullptr; }
+};
+typedef IndexIterator<TargetFile, TargetManifest> TargetIter;
+typedef IndexIterator<ProvidedFile, ProvidingManifest> ProvidedIter;
+
 
 //sets all properties except for:
 //  PT: "zipPath"

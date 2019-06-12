@@ -33,6 +33,8 @@ set(sources
     Manifest.cpp
     TdmSync.h
     TdmSync.cpp
+
+    TdmSync.natvis
 )
 
 set(tests_sources
