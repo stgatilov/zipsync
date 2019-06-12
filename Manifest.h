@@ -179,8 +179,16 @@ template<class File, class Manifest> struct IndexIterator {
 
     IndexIterator() : manifest(nullptr), index(0) {}
     IndexIterator(Manifest &manifest, int index) : manifest(&manifest), index(index) {}
-    IndexIterator(Manifest &manifest, const File *file) : manifest(&manifest), index(file - &manifest[0]) {
-        TdmSyncAssert(index >= 0 && index < manifest.size());
+    IndexIterator(Manifest &manifest, const File *file) {
+        if (file) {
+            this->manifest = &manifest;
+            this->index = file - &manifest[0];
+            TdmSyncAssert(index >= 0 && index < manifest.size());
+        }
+        else {
+            this->manifest = nullptr;
+            this->index = 0;
+        }
     }
     File& operator*() const { return (*manifest)[index]; }
     File* operator->() const { return &(*manifest)[index]; }
