@@ -59,4 +59,9 @@ public:
 //note: file must be NOT opened
 void unzGetCurrentFilePosition(unzFile zf, uint32_t *localHeaderStart, uint32_t *fileDataStart, uint32_t *fileDataEnd);
 
+//like unzLocateFile, but also checks exact match by byterange (which includes local file header)
+bool unzLocateFileAtBytes(unzFile zf, const char *filename, uint32_t from, uint32_t to);
+
+void minizipCopyFile(unzFile zf, zipFile zfOut, const char *filename, int method, int flags, uint16_t internalAttribs, uint32_t externalAttribs, uint32_t dosDate, bool copyRaw, uint32_t crc, uint32_t contentsSize);
+
 }

@@ -39,10 +39,15 @@ private:
     //the best matching provided file for every target file
     std::vector<Match> _matches;
 
+    /*
     //the manifest containing provided files created by repacking process
     ProvidedManifest _repackedMani;
     //the manifest containing no-longer-needed files from target zips
     ProvidedManifest _removedMani;
+    */
+
+    class Repacker;
+    friend class Repacker;
 
 public:
     //must be called prior to any usage of an instance
@@ -63,9 +68,6 @@ public:
 
     int MatchCount() const { return _matches.size(); }
     const Match &GetMatch(int idx) const { return _matches[idx]; }
-
-private:
-    void ValidateFile(const TargetFile &want, const TargetFile &have) const;
 };
 
 }
