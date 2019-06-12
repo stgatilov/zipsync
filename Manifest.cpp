@@ -86,10 +86,10 @@ void AnalyzeCurrentFile(unzFile zf, ProvidedFile &provided, TargetFile &target, 
 }
 
 void AppendManifestsFromLocalZip(
-    const std::string &zipPathAbs, const std::string &rootDir,             //path to local zip (both absolute?)
-    ProvidingLocation location,                                         //for providing manifest
-    const std::string &packageName,                                     //for target manifest
-    ProvidingManifest &providMani, TargetManifest &targetMani           //outputs
+    const std::string &zipPathAbs, const std::string &rootDir,
+    ProvidedLocation location,
+    const std::string &packageName,
+    ProvidedManifest &providMani, TargetManifest &targetMani
 ) {
     PathAR zipPath = PathAR::FromAbs(zipPathAbs, rootDir);
 
@@ -115,24 +115,24 @@ void AppendManifestsFromLocalZip(
     }
     zf.reset();
 }
-void ProvidingManifest::AppendLocalZip(const std::string &zipPath, const std::string &rootDir) {
+void ProvidedManifest::AppendLocalZip(const std::string &zipPath, const std::string &rootDir) {
     TargetManifest temp;
-    ProvidingLocation location = (PathAR::IsHttp(rootDir) ? ProvidingLocation::RemoteHttp : ProvidingLocation::Local);
+    ProvidedLocation location = (PathAR::IsHttp(rootDir) ? ProvidedLocation::RemoteHttp : ProvidedLocation::Local);
     AppendManifestsFromLocalZip(zipPath, rootDir, location, "", *this, temp);
 }
 void TargetManifest::AppendLocalZip(const std::string &zipPath, const std::string &rootDir, const std::string &packageName) {
-    ProvidingManifest temp;
-    AppendManifestsFromLocalZip(zipPath, rootDir, ProvidingLocation::Inplace, packageName, temp, *this);
+    ProvidedManifest temp;
+    AppendManifestsFromLocalZip(zipPath, rootDir, ProvidedLocation::Inplace, packageName, temp, *this);
 }
 
 void TargetManifest::AppendManifest(const TargetManifest &other) {
     AppendVector(files, other.files);
 }
-void ProvidingManifest::AppendManifest(const ProvidingManifest &other) {
+void ProvidedManifest::AppendManifest(const ProvidedManifest &other) {
     AppendVector(files, other.files);
 }
 
-IniData ProvidingManifest::WriteToIni() const {
+IniData ProvidedManifest::WriteToIni() const {
     //sort files by INI order
     std::vector<const ProvidedFile*> order;
     for (const auto &f : files)
@@ -154,8 +154,8 @@ IniData ProvidingManifest::WriteToIni() const {
 
     return ini;
 }
-void ProvidingManifest::ReadFromIni(const IniData &data, const std::string &rootDir) {
-    ProvidingLocation location = (PathAR::IsHttp(rootDir) ? ProvidingLocation::RemoteHttp : ProvidingLocation::Local);
+void ProvidedManifest::ReadFromIni(const IniData &data, const std::string &rootDir) {
+    ProvidedLocation location = (PathAR::IsHttp(rootDir) ? ProvidedLocation::RemoteHttp : ProvidedLocation::Local);
 
     for (const auto &pNS : data) {
         ProvidedFile pf;

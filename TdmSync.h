@@ -14,7 +14,7 @@ enum class UpdateType {
  * Represents the local updater cache (physically present near installation).
  * Usually it contains:
  *   1. old files which are no longer used, but may be helpful to return back to previous version
- *   2. providing manifest for all the files in from p.1
+ *   2. provided manifest for all the files in from p.1
  *   3. various manifests from remote places --- to avoid downloading them again
  */
 class LocalCache {
@@ -36,9 +36,9 @@ public:
 private:
     //the target manifest being the goal of this update
     TargetManifest targetMani;
-    //the providing manifest showing the current state of installation
+    //the provided manifest showing the current state of installation
     //note: it is changed during the update process
-    ProvidingManifest providingMani;
+    ProvidedManifest providedMani;
     //the root directory of installation being updated
     //all target files zip paths are treated relative to it
     std::string rootDir;
@@ -50,13 +50,13 @@ private:
     std::vector<Match> matches;
 
     //the manifest containing provided files created by repacking process
-    ProvidingManifest repackedMani;
+    ProvidedManifest repackedMani;
     //the manifest containing no-longer-needed files from target zips
-    ProvidingManifest removedMani;
+    ProvidedManifest removedMani;
 
 public:
     //must be called prior to any usage of an instance
-    void Init(TargetManifest &&targetMani, ProvidingManifest &&providingMani, const std::string &rootDir);
+    void Init(TargetManifest &&targetMani, ProvidedManifest &&providedMani, const std::string &rootDir);
 
     //decide how to execute the update (which files to find where)
     bool DevelopPlan(UpdateType type);

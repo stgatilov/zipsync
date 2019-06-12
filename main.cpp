@@ -10,11 +10,11 @@ void CreateManifests() {
     static const char *ROOT = R"(C:/TheDarkMod/darkmod_207)";
 
     int t_before = clock();
-    ProvidingManifest provMani;
+    ProvidedManifest provMani;
     TargetManifest targMani;
     AppendManifestsFromLocalZip(
         ZIP, ROOT,
-        ProvidingLocation::Local, "assets",
+        ProvidedLocation::Local, "assets",
         provMani, targMani
     );
     int t_after = clock();
@@ -27,7 +27,7 @@ void CreateManifests() {
     
     auto data3 = ReadIniFile("prov.ini");
     assert(data3 == data1);
-    ProvidingManifest provMani2;
+    ProvidedManifest provMani2;
     provMani2.ReadFromIni(data3, ROOT);
     auto data4 = ReadIniFile("targ.ini");
     assert(data4 == data2);
@@ -41,7 +41,7 @@ void OneZipLocalUpdate() {
     static const char *ZIP_REL207   = R"(F:/thedarkmod_releases/release207/tdm_base01.pk4)";
     static const char *ZIP_206TO207 = R"(F:/thedarkmod_releases/differential/tdm_update_2.06_to_2.07.zip)";
 
-    ProvidingManifest provMani;
+    ProvidedManifest provMani;
     provMani.AppendLocalZip(ZIP_REL206, stdext::path(ZIP_REL206).parent_path().string());
     provMani.AppendLocalZip(ZIP_206TO207, stdext::path(ZIP_206TO207).parent_path().string());
     TargetManifest targMani;
@@ -49,7 +49,7 @@ void OneZipLocalUpdate() {
 
     stdext::create_directories(stdext::path(ROOT));
     UpdateProcess update;
-    update.Init(TargetManifest(targMani), ProvidingManifest(provMani), ROOT);
+    update.Init(TargetManifest(targMani), ProvidedManifest(provMani), ROOT);
     update.DevelopPlan(UpdateType::SameContents);
     update.RepackZips();
 }

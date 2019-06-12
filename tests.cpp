@@ -58,8 +58,8 @@ template<class T> const T &Search(const std::vector<std::pair<std::string, T>> &
     return data[pos].second;
 }
 
-TEST_CASE("ProvidingManifest: Read/Write") {
-    ProvidingManifest mani;
+TEST_CASE("ProvidedManifest: Read/Write") {
+    ProvidedManifest mani;
 
     ProvidedFile pf;
     pf.filename = "textures/model/darkmod/grass/grass01.jpg";
@@ -86,7 +86,7 @@ TEST_CASE("ProvidingManifest: Read/Write") {
 
     IniData savedIni = mani.WriteToIni();
 
-    ProvidingManifest restored;
+    ProvidedManifest restored;
     restored.ReadFromIni(savedIni, "nowhere");
 
     std::vector<int> order = {1, 0, 2};
@@ -102,7 +102,7 @@ TEST_CASE("ProvidingManifest: Read/Write") {
     }
 
     for (int t = 0; t < 5; t++) {
-        ProvidingManifest newMani;
+        ProvidedManifest newMani;
         newMani.ReadFromIni(savedIni, "nowhere");
         IniData newIni = newMani.WriteToIni();
         CHECK(savedIni == newIni);
@@ -254,42 +254,42 @@ string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
     zipClose(zf, NULL);
     #undef PACK_BUF
 
-    ProvidingManifest providing;
+    ProvidedManifest provided;
     TargetManifest target;
     AppendManifestsFromLocalZip(
         zipPath1, rootDir,
-        ProvidingLocation::Local, "default",
-        providing, target
+        ProvidedLocation::Local, "default",
+        provided, target
     );
     AppendManifestsFromLocalZip(
         zipPath2, rootDir,
-        ProvidingLocation::RemoteHttp, "chaos",
-        providing, target
+        ProvidedLocation::RemoteHttp, "chaos",
+        provided, target
     );
 
-    REQUIRE(providing.size() == 4);
+    REQUIRE(provided.size() == 4);
     REQUIRE(target.size() == 4);
-    REQUIRE(providing[0].filename == fnPkgJson   );
-    REQUIRE(providing[1].filename == fnRndDat    );
-    REQUIRE(providing[2].filename == fnSeqBin    );
-    REQUIRE(providing[3].filename == fnDoubleDump);
+    REQUIRE(provided[0].filename == fnPkgJson   );
+    REQUIRE(provided[1].filename == fnRndDat    );
+    REQUIRE(provided[2].filename == fnSeqBin    );
+    REQUIRE(provided[3].filename == fnDoubleDump);
     for (int i = 0; i < target.size(); i++)
-        REQUIRE(target[i].filename == providing[i].filename);
+        REQUIRE(target[i].filename == provided[i].filename);
 
-    CHECK(providing[0].zipPath.abs == zipPath1);  CHECK(target[0].zipPath.abs == zipPath1);
-    CHECK(providing[1].zipPath.abs == zipPath1);  CHECK(target[1].zipPath.abs == zipPath1);
-    CHECK(providing[2].zipPath.abs == zipPath1);  CHECK(target[2].zipPath.abs == zipPath1);
-    CHECK(providing[3].zipPath.abs == zipPath2);  CHECK(target[3].zipPath.abs == zipPath2);
-    CHECK(providing[0].location == ProvidingLocation::Local);       CHECK(target[0].package == "default");
-    CHECK(providing[1].location == ProvidingLocation::Local);       CHECK(target[1].package == "default");
-    CHECK(providing[2].location == ProvidingLocation::Local);       CHECK(target[2].package == "default");
-    CHECK(providing[3].location == ProvidingLocation::RemoteHttp);  CHECK(target[3].package == "chaos"  );
-    CHECK(providing[0].contentsHash.Hex() == "8ec061d20526f1e5ce56519f09bc1ee2ad065464e3e7cbbb94324865bca95a45"); //computed externally in Python
-    CHECK(providing[1].contentsHash.Hex() == "75b25a4dd22ac100925e09d62016c0ffdb5998b470bc685773620d4f37458b69");
-    CHECK(providing[2].contentsHash.Hex() == "54b97c474a60b36c16a5c6beea5b2a03a400096481196bbfe2202ef7a547408c");
-    CHECK(providing[3].contentsHash.Hex() == "009c0860b467803040c61deb6544a3f515ac64c63d234e286d3e2fa352411e91");
+    CHECK(provided[0].zipPath.abs == zipPath1);  CHECK(target[0].zipPath.abs == zipPath1);
+    CHECK(provided[1].zipPath.abs == zipPath1);  CHECK(target[1].zipPath.abs == zipPath1);
+    CHECK(provided[2].zipPath.abs == zipPath1);  CHECK(target[2].zipPath.abs == zipPath1);
+    CHECK(provided[3].zipPath.abs == zipPath2);  CHECK(target[3].zipPath.abs == zipPath2);
+    CHECK(provided[0].location == ProvidedLocation::Local);       CHECK(target[0].package == "default");
+    CHECK(provided[1].location == ProvidedLocation::Local);       CHECK(target[1].package == "default");
+    CHECK(provided[2].location == ProvidedLocation::Local);       CHECK(target[2].package == "default");
+    CHECK(provided[3].location == ProvidedLocation::RemoteHttp);  CHECK(target[3].package == "chaos"  );
+    CHECK(provided[0].contentsHash.Hex() == "8ec061d20526f1e5ce56519f09bc1ee2ad065464e3e7cbbb94324865bca95a45"); //computed externally in Python
+    CHECK(provided[1].contentsHash.Hex() == "75b25a4dd22ac100925e09d62016c0ffdb5998b470bc685773620d4f37458b69");
+    CHECK(provided[2].contentsHash.Hex() == "54b97c474a60b36c16a5c6beea5b2a03a400096481196bbfe2202ef7a547408c");
+    CHECK(provided[3].contentsHash.Hex() == "009c0860b467803040c61deb6544a3f515ac64c63d234e286d3e2fa352411e91");
     for (int i = 0; i < target.size(); i++)
-        CHECK(target[i].contentsHash == providing[i].contentsHash);
+        CHECK(target[i].contentsHash == provided[i].contentsHash);
     CHECK(target[0].fhLastModTime == 0);
     CHECK(target[1].fhLastModTime == 0);
     CHECK(target[2].fhLastModTime == 123456789);
@@ -329,12 +329,12 @@ string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
     }
 
     for (int i = 0; i < 4; i++) {
-        const uint32_t *br = providing[i].byterange;
+        const uint32_t *br = provided[i].byterange;
         std::vector<char> fdata(br[1] - br[0]);
         int totalSize = target[i].fhCompressedSize + target[i].filename.size() + 30;
         CHECK(fdata.size() == totalSize);
 
-        FILE *f = fopen(providing[i].zipPath.abs.c_str(), "rb");
+        FILE *f = fopen(provided[i].zipPath.abs.c_str(), "rb");
         REQUIRE(f);
         fseek(f, br[0], SEEK_SET);
         CHECK(fread(fdata.data(), 1, fdata.size(), f) == fdata.size());
@@ -346,11 +346,11 @@ string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
         int offs = fdata.size() - target[i].fhCompressedSize, sz = target[i].fhCompressedSize;
         HashDigest digest = Hasher().Update(fdata.data() + offs, sz).Finalize();
         CHECK(target[i].compressedHash == digest);
-        CHECK(target[i].compressedHash == providing[i].compressedHash);
+        CHECK(target[i].compressedHash == provided[i].compressedHash);
     }
 }
 
-TEST_CASE("Reject bad zips") {
+TEST_CASE("BadZips") {
     std::string rootDir = GetTempDir().string();
     stdext::create_directories(stdext::path(rootDir));
 
@@ -412,20 +412,20 @@ TEST_CASE("Reject bad zips") {
     #undef TEST_END
 
     for (int i = 0; i < testsCount; i++) {
-        CHECK_THROWS(ProvidingManifest().AppendLocalZip(zipPath[i], rootDir));
+        CHECK_THROWS(ProvidedManifest().AppendLocalZip(zipPath[i], rootDir));
         CHECK_THROWS(TargetManifest().AppendLocalZip(zipPath[i], rootDir, "?"));
     }
 }
 
 TEST_CASE("UpdateProcess::DevelopPlan") {
-    ProvidingManifest providing;
+    ProvidedManifest provided;
     TargetManifest target;
 
     struct MatchAnswer {
-        int bestLocation = int(ProvidingLocation::Nowhere);
+        int bestLocation = int(ProvidedLocation::Nowhere);
         std::vector<std::string> filenames;
     };
-    //for each target filename: list of providing filenames which match
+    //for each target filename: list of provided filenames which match
     std::map<std::string, MatchAnswer> correctMatching[2];
 
     //generate one file per every possible combination of availability:
@@ -451,7 +451,7 @@ TEST_CASE("UpdateProcess::DevelopPlan") {
                     }
 
                     for (int j = 0; j < 2; j++) if (modes[j] >= 0) {
-                        int providedIdx = providing.size();
+                        int providedIdx = provided.size();
                         int m = modes[j];
 
                         ProvidedFile pf;
@@ -460,21 +460,21 @@ TEST_CASE("UpdateProcess::DevelopPlan") {
                         pf.contentsHash = (m >= 1 ? tf.contentsHash : GenHash(providedIdx + 2000));
                         pf.compressedHash = (m == 2 ? tf.compressedHash : GenHash(providedIdx + 3000));
                         if (pl == 0) {
-                            pf.location = ProvidingLocation::Local;     //Inplace must be set of DevelopPlan
+                            pf.location = ProvidedLocation::Local;     //Inplace must be set of DevelopPlan
                             pf.zipPath = tf.zipPath;
                             pf.filename = tf.filename;
                         }
                         else if (pl == 1) {
-                            pf.location = ProvidingLocation::Local;
+                            pf.location = ProvidedLocation::Local;
                             pf.zipPath = PathAR::FromRel("other" + std::to_string(providedIdx % 4) + ".zip", "nowhere");
                             pf.filename = "some_file" + std::to_string(providedIdx);
                         }
                         else if (pl == 2) {
-                            pf.location = ProvidingLocation::RemoteHttp;
+                            pf.location = ProvidedLocation::RemoteHttp;
                             pf.zipPath = PathAR::FromRel("other" + std::to_string(providedIdx % 4) + ".zip", "http://localhost:7123");
                             pf.filename = "some_file" + std::to_string(providedIdx);
                         }
-                        providing.AppendFile(pf);
+                        provided.AppendFile(pf);
 
                         for (int t = 0; t < 2; t++) {
                             bool matches = (t == 0 ? pf.contentsHash == tf.contentsHash : pf.compressedHash == tf.compressedHash);
@@ -503,15 +503,15 @@ TEST_CASE("UpdateProcess::DevelopPlan") {
         for (int t = 0; t < 2; t++) {
 
             TargetManifest targetCopy = target;
-            ProvidingManifest providingCopy = providing;
+            ProvidedManifest providedCopy = provided;
             if (attempt > 0) {
                 //note: here we assume that files are stored in a vector =(
                 std::shuffle(&targetCopy[0], &targetCopy[0] + targetCopy.size(), rnd);
-                std::shuffle(&providingCopy[0], &providingCopy[0] + providingCopy.size(), rnd);
+                std::shuffle(&providedCopy[0], &providedCopy[0] + providedCopy.size(), rnd);
             }
 
             UpdateProcess update;
-            update.Init(std::move(targetCopy), std::move(providingCopy), "nowhere");
+            update.Init(std::move(targetCopy), std::move(providedCopy), "nowhere");
             update.DevelopPlan(t == 0 ? UpdateType::SameContents : UpdateType::SameCompressed);
 
             for (int i = 0; i < update.MatchCount(); i++) {

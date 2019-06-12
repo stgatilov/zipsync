@@ -13,7 +13,7 @@ namespace TdmSync {
 /**
  * A type of location of a provided file.
  */
-enum class ProvidingLocation {
+enum class ProvidedLocation {
     Inplace = 0,    //local zip file in the place where it should be
     Local = 1,      //local zip file (e.g. inside local cache of old versions)
     RemoteHttp = 2, //file remotely available via HTTP 1.1+
@@ -22,7 +22,7 @@ enum class ProvidingLocation {
 
 /**
  * Metainformation about a provided file.
- * All of this can be quickly deduced from "providing manifest"
+ * All of this can be quickly deduced from "provided manifest"
  * without having to download the actual provided files.
  */
 struct ProvidedFile {
@@ -31,7 +31,7 @@ struct ProvidedFile {
     //filename inside zip (for ordering/debugging)
     std::string filename;
     //type of file: local/remote
-    ProvidingLocation location;
+    ProvidedLocation location;
     //range of bytes in the zip representing the file
     //note: local file header INcluded
     uint32_t byterange[2];
@@ -109,12 +109,12 @@ struct TargetFile {
 };
 
 /**
- * "Providing manifest" describes a set of files available.
- * The sync algorithm can soak any number of providing manifests.
+ * "Provided manifest" describes a set of files available.
+ * The sync algorithm can soak any number of provided manifests.
  * Update is possible if all of them together cover the requirements of the selected target packages.
- * Example: we can create a providing manifest for a TDM's "differential update package".
+ * Example: we can create a provided manifest for a TDM's "differential update package".
  */
-class ProvidingManifest {
+class ProvidedManifest {
     //arbitrary text attached to the manifest (only for debugging)
     std::string comment;
 
@@ -131,7 +131,7 @@ public:
 
     void Clear() { files.clear(); }
     void AppendFile(const ProvidedFile &file) { files.push_back(file); }
-    void AppendManifest(const ProvidingManifest &other);
+    void AppendManifest(const ProvidedManifest &other);
     void AppendLocalZip(const std::string &zipPath, const std::string &rootDir);
 
     void ReadFromIni(const IniData &data, const std::string &rootDir);
@@ -195,7 +195,7 @@ template<class File, class Manifest> struct IndexIterator {
     explicit operator bool() const { return manifest != nullptr; }
 };
 typedef IndexIterator<TargetFile, TargetManifest> TargetIter;
-typedef IndexIterator<ProvidedFile, ProvidingManifest> ProvidedIter;
+typedef IndexIterator<ProvidedFile, ProvidedManifest> ProvidedIter;
 
 
 //sets all properties except for:
@@ -209,9 +209,9 @@ void AnalyzeCurrentFile(unzFile zf, ProvidedFile &provided, TargetFile &target, 
 //creates both types of manifest at once (2x faster than creating them separately)
 void AppendManifestsFromLocalZip(
     const std::string &zipPath, const std::string &rootDir,             //path to local zip (both absolute?)
-    ProvidingLocation location,                                         //for providing manifest
+    ProvidedLocation location,                                          //for provided manifest
     const std::string &packageName,                                     //for target manifest
-    ProvidingManifest &providMani, TargetManifest &targetMani           //outputs
+    ProvidedManifest &providMani, TargetManifest &targetMani            //outputs
 );
 
 }

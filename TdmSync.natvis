@@ -19,7 +19,7 @@
       <ExpandedItem>files</ExpandedItem>
     </Expand>
   </Type>
-  <Type Name="TdmSync::ProvidingManifest">
+  <Type Name="TdmSync::ProvidedManifest">
     <DisplayString>PM {comment}: {files}</DisplayString>
     <Expand>
       <ExpandedItem>files</ExpandedItem>

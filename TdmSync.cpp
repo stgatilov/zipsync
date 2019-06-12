@@ -10,9 +10,9 @@
 
 namespace TdmSync {
 
-void UpdateProcess::Init(TargetManifest &&targetMani_, ProvidingManifest &&providingMani_, const std::string &rootDir_) {
+void UpdateProcess::Init(TargetManifest &&targetMani_, ProvidedManifest &&providedMani_, const std::string &rootDir_) {
     targetMani = std::move(targetMani_);
-    providingMani = std::move(providingMani_);
+    providedMani = std::move(providedMani_);
     rootDir = rootDir_;
 
     targetMani.ReRoot(rootDir);
@@ -33,27 +33,27 @@ bool UpdateProcess::DevelopPlan(UpdateType type) {
         TdmSyncAssertF(pib.second, "Duplicate target file at place %s", fullPath.c_str());
     }
 
-    //find providing files which are already in-place
-    for (int i = 0; i < providingMani.size(); i++) {
-        ProvidedFile &pf = providingMani[i];
-        if (pf.location != ProvidingLocation::Local)
+    //find provided files which are already in-place
+    for (int i = 0; i < providedMani.size(); i++) {
+        ProvidedFile &pf = providedMani[i];
+        if (pf.location != ProvidedLocation::Local)
             continue;
         std::string fullPath = GetFullPath(pf.zipPath.abs, pf.filename);
         auto iter = pathToTarget.find(fullPath);
         if (iter != pathToTarget.end()) {
-            //give this providing file priority when choosing where to take file from
-            pf.location = ProvidingLocation::Inplace;
+            //give this provided file priority when choosing where to take file from
+            pf.location = ProvidedLocation::Inplace;
         }
     }
 
-    //build index of providing files (by hash on uncompressed file)
+    //build index of provided files (by hash on uncompressed file)
     std::map<HashDigest, std::vector<const ProvidedFile*>> pfIndex;
-    for (int i = 0; i < providingMani.size(); i++) {
-        const ProvidedFile &pf = providingMani[i];
+    for (int i = 0; i < providedMani.size(); i++) {
+        const ProvidedFile &pf = providedMani[i];
         pfIndex[pf.contentsHash].push_back(&pf);
     }
 
-    //find matching providing file for every target file
+    //find matching provided file for every target file
     matches.clear();
     bool fullPlan = true;
     for (int i = 0; i < targetMani.size(); i++) {
@@ -78,7 +78,7 @@ bool UpdateProcess::DevelopPlan(UpdateType type) {
                 bestFile = pf;
             }
         }
-        matches.push_back(Match{TargetIter(targetMani, &tf), ProvidedIter(providingMani, bestFile)});
+        matches.push_back(Match{TargetIter(targetMani, &tf), ProvidedIter(providedMani, bestFile)});
     }
 
     return fullPlan;
@@ -120,7 +120,7 @@ void UpdateProcess::RepackZips() {
     for (Match m : matches) {
         std::string fullPath = GetFullPath(m.target->zipPath.abs, m.target->filename);
         TdmSyncAssertF(m.provided, "RepackZips: target file %s is not provided", fullPath.c_str());
-        TdmSyncAssertF(m.provided->location == ProvidingLocation::Inplace || m.provided->location == ProvidingLocation::Local, "RepackZips: target file %s is not available locally", fullPath.c_str());
+        TdmSyncAssertF(m.provided->location == ProvidedLocation::Inplace || m.provided->location == ProvidedLocation::Local, "RepackZips: target file %s is not available locally", fullPath.c_str());
     }
 
     //group target files by their zips
@@ -135,8 +135,8 @@ void UpdateProcess::RepackZips() {
 
     //check which target zips need no change at all
     std::map<std::string, std::vector<const ProvidedFile*>> zipToProvided;
-    for (int i = 0; i < providingMani.size(); i++) {
-        zipToProvided[providingMani[i].zipPath.abs].push_back(&providingMani[i]);
+    for (int i = 0; i < providedMani.size(); i++) {
+        zipToProvided[providedMani[i].zipPath.abs].push_back(&providedMani[i]);
     }
     std::vector<std::string> zipsDontChange;
     for (const auto &pZV : zipToMatchIds) {
@@ -145,7 +145,7 @@ void UpdateProcess::RepackZips() {
         int cntInplace = matchIds.size();
         for (int midx : matchIds) {
             Match m = matches[midx];
-            if (m.provided->location != ProvidingLocation::Inplace)
+            if (m.provided->location != ProvidedLocation::Inplace)
                 cntInplace--;
         }
         int cntProvided = 0;
@@ -255,7 +255,7 @@ void UpdateProcess::RepackZips() {
             TargetFile targetNew;
             ProvidedFile providedNew;
             providedNew.zipPath = targetNew.zipPath = PathAR::FromAbs(zipPathOut, rootDir);
-            providedNew.location = ProvidingLocation::Local;
+            providedNew.location = ProvidedLocation::Local;
             targetNew.package = "[repacked]";
             providedNew.contentsHash = targetNew.contentsHash = m.target->contentsHash;
             providedNew.compressedHash = targetNew.compressedHash = m.target->compressedHash;   //will be recomputed if needsRehashCompressed
