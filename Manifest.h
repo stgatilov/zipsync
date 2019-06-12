@@ -42,8 +42,7 @@ struct ProvidedFile {
     //note: local file header EXcluded
     HashDigest compressedHash;
 
-    static bool IsLess_ZipFn(const ProvidedFile &a, const ProvidedFile &b);
-    static bool IsLess_Ini(const ProvidedFile &a, const ProvidedFile &b);
+    static bool IsLess_ByZip(const ProvidedFile &a, const ProvidedFile &b);
 };
 
 /**
@@ -104,8 +103,7 @@ struct TargetFile {
     //note: local file header EXcluded
     HashDigest compressedHash;
 
-    static bool IsLess_ZipFn(const TargetFile &a, const TargetFile &b);
-    static bool IsLess_Ini(const TargetFile &a, const TargetFile &b);
+    static bool IsLess_ByZip(const TargetFile &a, const TargetFile &b);
 };
 
 /**

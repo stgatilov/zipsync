@@ -12,17 +12,11 @@
 
 namespace TdmSync {
 
-bool ProvidedFile::IsLess_ZipFn(const ProvidedFile &a, const ProvidedFile &b) {
+bool ProvidedFile::IsLess_ByZip(const ProvidedFile &a, const ProvidedFile &b) {
     return std::tie(a.zipPath.rel, a.filename, a.contentsHash) < std::tie(b.zipPath.rel, b.filename, b.contentsHash);
 }
-bool TargetFile::IsLess_ZipFn(const TargetFile &a, const TargetFile &b) {
-    return std::tie(a.zipPath.rel, a.filename, a.contentsHash) < std::tie(b.zipPath.rel, b.filename, b.contentsHash);
-}
-bool ProvidedFile::IsLess_Ini(const ProvidedFile &a, const ProvidedFile &b) {
-    return IsLess_ZipFn(a, b);
-}
-bool TargetFile::IsLess_Ini(const TargetFile &a, const TargetFile &b) {
-    return std::tie(a.package, a.zipPath.rel, a.filename, a.contentsHash) < std::tie(b.package, b.zipPath.rel, b.filename, b.contentsHash);
+bool TargetFile::IsLess_ByZip(const TargetFile &a, const TargetFile &b) {
+    return std::tie(a.zipPath.rel, a.package, a.filename, a.contentsHash) < std::tie(b.zipPath.rel, b.package, b.filename, b.contentsHash);
 }
 
 
@@ -138,7 +132,7 @@ IniData ProvidedManifest::WriteToIni() const {
     for (const auto &f : _files)
         order.push_back(&f);
     std::sort(order.begin(), order.end(), [](auto a, auto b) {
-        return ProvidedFile::IsLess_Ini(*a, *b);
+        return ProvidedFile::IsLess_ByZip(*a, *b);
     });
 
     IniData ini;
@@ -190,7 +184,7 @@ IniData TargetManifest::WriteToIni() const {
     for (const auto &f : _files)
         order.push_back(&f);
     std::sort(order.begin(), order.end(), [](auto a, auto b) {
-        return TargetFile::IsLess_Ini(*a, *b);
+        return TargetFile::IsLess_ByZip(*a, *b);
     });
 
     IniData ini;

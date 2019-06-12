@@ -131,7 +131,7 @@ public:
         //sort matches: all matches with target in one zip are consecutive
         //I'm not sure whether it is required by the algorithm, but it is more convenient
         std::sort(_owner._matches.begin(), _owner._matches.end(), [](const Match &a, const Match &b) {
-            return TargetFile::IsLess_ZipFn(*a.target, *b.target);
+            return TargetFile::IsLess_ByZip(*a.target, *b.target);
         });
 
         //classify all matches into target zips
