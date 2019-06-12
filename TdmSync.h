@@ -28,9 +28,9 @@ class UpdateProcess {
 public:
     struct Match {
         //target file (surely not NULL)
-        const TargetFile *target;
+        TargetIter target;
         //provided file which will fulfill it (if NULL, then no match found)
-        const ProvidedFile *provided;
+        ProvidedIter provided;
     };
 
 private:

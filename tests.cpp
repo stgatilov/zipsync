@@ -518,9 +518,9 @@ TEST_CASE("UpdateProcess::DevelopPlan") {
                 UpdateProcess::Match match = update.GetMatch(i);
                 const MatchAnswer &answer = correctMatching[t][match.target->filename];
                 if (answer.filenames.empty())
-                    CHECK(match.provided == nullptr);
+                    CHECK(!match.provided);
                 else {
-                    CHECK(match.provided != nullptr);
+                    CHECK(match.provided);
                     std::string fn = match.provided->filename;
                     CHECK(std::find(answer.filenames.begin(), answer.filenames.end(), fn) != answer.filenames.end());
                     if (attempt == 0) {

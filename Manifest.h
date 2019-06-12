@@ -130,7 +130,6 @@ public:
     ProvidedFile &operator[](int index) { return files[index]; }
 
     void Clear() { files.clear(); }
-    void Reserve(int num) { files.reserve(num); }
     void AppendFile(const ProvidedFile &file) { files.push_back(file); }
     void AppendManifest(const ProvidingManifest &other);
     void AppendLocalZip(const std::string &zipPath, const std::string &rootDir);

@@ -61,7 +61,7 @@ bool UpdateProcess::DevelopPlan(UpdateType type) {
 
         auto iter = pfIndex.find(tf.contentsHash);
         if (iter == pfIndex.end()) {
-            matches.push_back(Match{&tf, nullptr});
+            matches.push_back(Match{TargetIter(targetMani, &tf), ProvidedIter()});
             fullPlan = false;
             continue;
         }
@@ -78,7 +78,7 @@ bool UpdateProcess::DevelopPlan(UpdateType type) {
                 bestFile = pf;
             }
         }
-        matches.push_back(Match{&tf, bestFile});
+        matches.push_back(Match{TargetIter(targetMani, &tf), ProvidedIter(providingMani, bestFile)});
     }
 
     return fullPlan;
@@ -164,8 +164,6 @@ void UpdateProcess::RepackZips() {
     //prepare manifest for repacked files
     repackedMani.Clear();
     removedMani.Clear();
-    //note: this is needed because of our reliance of std::vector-by-value =(
-    repackedMani.Reserve(targetMani.size());
 
     //check how many provided files are used from every zip
     std::map<std::string, int> zipToMatchCnt;
@@ -269,7 +267,7 @@ void UpdateProcess::RepackZips() {
             repackedMani.AppendFile(providedNew);
             //switch the match for the target file to this new file
             zipToMatchCnt[m.provided->zipPath.abs]--;
-            m.provided = &repackedMani[repackedMani.size() - 1];
+            m.provided = ProvidedIter(repackedMani, repackedMani.size() - 1);
         }
         zf.reset();
 
