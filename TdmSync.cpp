@@ -19,6 +19,16 @@ void UpdateProcess::Init(TargetManifest &&targetMani_, ProvidedManifest &&provid
 
     _updateType = (UpdateType)0xDDDDDDDD;
     _matches.clear();
+
+    //make sure every target zip is "managed"
+    for (int i = 0; i < _targetMani.size(); i++) {
+        _managedZips.insert(_targetMani[i].zipPath.abs);
+    }
+}
+
+void UpdateProcess::AddManagedZip(const std::string &zipPath, bool relative) {
+    PathAR path = relative ? PathAR::FromRel(zipPath, _rootDir) : PathAR::FromAbs(zipPath, _rootDir);
+    auto pib = _managedZips.insert(path.abs);
 }
 
 bool UpdateProcess::DevelopPlan(UpdateType type) {

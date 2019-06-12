@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Manifest.h"
+#include <set>
 
 
 namespace TdmSync {
@@ -35,6 +36,9 @@ private:
     std::string _rootDir;
     //which type of "sameness" we want to achieve
     UpdateType _updateType;
+    //set of local zips which should be removed/replaced by update
+    //note: every zip with a target file gets managed automatically
+    std::set<std::string> _managedZips;
 
     //the best matching provided file for every target file
     std::vector<Match> _matches;
@@ -52,6 +56,7 @@ private:
 public:
     //must be called prior to any usage of an instance
     void Init(TargetManifest &&targetMani, ProvidedManifest &&providedMani, const std::string &rootDir);
+    void AddManagedZip(const std::string &zipPath, bool relative = false);
 
     //decide how to execute the update (which files to find where)
     bool DevelopPlan(UpdateType type);
