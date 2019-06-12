@@ -2,8 +2,8 @@
 <AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
 
   <Type Name="TdmSync::HashDigest">
-    <DisplayString ExcludeView="simple">{((uint64_t*)data)[0],x} - {((uint64_t*)data)[1],x} - {((uint64_t*)data)[2],x} - {((uint64_t*)data)[3],x}</DisplayString>
-    <DisplayString IncludeView="simple">{((uint64_t*)data)[0],x}...</DisplayString>
+    <DisplayString ExcludeView="simple">{((uint64_t*)_data)[0],x} - {((uint64_t*)_data)[1],x} - {((uint64_t*)_data)[2],x} - {((uint64_t*)_data)[3],x}</DisplayString>
+    <DisplayString IncludeView="simple">{((uint64_t*)_data)[0],x}...</DisplayString>
   </Type>
   
   <Type Name="TdmSync::TargetFile">
@@ -14,21 +14,21 @@
   </Type>
   
   <Type Name="TdmSync::TargetManifest">
-    <DisplayString>TM {comment}: {files}</DisplayString>
+    <DisplayString>TM {_comment}: {_files}</DisplayString>
     <Expand>
-      <ExpandedItem>files</ExpandedItem>
+      <ExpandedItem>_files</ExpandedItem>
     </Expand>
   </Type>
   <Type Name="TdmSync::ProvidedManifest">
-    <DisplayString>PM {comment}: {files}</DisplayString>
+    <DisplayString>PM {_comment}: {_files}</DisplayString>
     <Expand>
-      <ExpandedItem>files</ExpandedItem>
+      <ExpandedItem>_files</ExpandedItem>
     </Expand>
   </Type>
 
   <Type Name="TdmSync::IndexIterator&lt;*,*&gt;">
     <Expand>
-      <ExpandedItem>manifest->files._Mypair._Myval2._Myfirst + index</ExpandedItem>
+      <ExpandedItem>_manifest->_files._Mypair._Myval2._Myfirst + _index</ExpandedItem>
     </Expand>
   </Type>
   
