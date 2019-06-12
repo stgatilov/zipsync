@@ -126,16 +126,16 @@ void TargetManifest::AppendLocalZip(const std::string &zipPath, const std::strin
 }
 
 void TargetManifest::AppendManifest(const TargetManifest &other) {
-    AppendVector(files, other.files);
+    AppendVector(_files, other._files);
 }
 void ProvidedManifest::AppendManifest(const ProvidedManifest &other) {
-    AppendVector(files, other.files);
+    AppendVector(_files, other._files);
 }
 
 IniData ProvidedManifest::WriteToIni() const {
     //sort files by INI order
     std::vector<const ProvidedFile*> order;
-    for (const auto &f : files)
+    for (const auto &f : _files)
         order.push_back(&f);
     std::sort(order.begin(), order.end(), [](auto a, auto b) {
         return ProvidedFile::IsLess_Ini(*a, *b);
@@ -187,7 +187,7 @@ void ProvidedManifest::ReadFromIni(const IniData &data, const std::string &rootD
 IniData TargetManifest::WriteToIni() const {
     //sort files by INI order
     std::vector<const TargetFile*> order;
-    for (const auto &f : files)
+    for (const auto &f : _files)
         order.push_back(&f);
     std::sort(order.begin(), order.end(), [](auto a, auto b) {
         return TargetFile::IsLess_Ini(*a, *b);
@@ -244,7 +244,7 @@ void TargetManifest::ReadFromIni(const IniData &data, const std::string &rootDir
 }
 
 void TargetManifest::ReRoot(const std::string &rootDir) {
-    for (TargetFile &tf : files) {
+    for (TargetFile &tf : _files) {
         tf.zipPath = PathAR::FromRel(tf.zipPath.rel, rootDir);
     }
 }

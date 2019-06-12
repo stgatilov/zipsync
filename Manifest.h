@@ -116,21 +116,21 @@ struct TargetFile {
  */
 class ProvidedManifest {
     //arbitrary text attached to the manifest (only for debugging)
-    std::string comment;
+    std::string _comment;
 
     //the set of files declared available by this manifest
-    std::vector<ProvidedFile> files;
+    std::vector<ProvidedFile> _files;
 
 public:
-    const std::string &GetComment() const { return comment; }
-    void SetComment(const std::string &text) { comment = text; }
+    const std::string &GetComment() const { return _comment; }
+    void SetComment(const std::string &text) { _comment = text; }
 
-    int size() const { return files.size(); }
-    const ProvidedFile &operator[](int index) const { return files[index]; }
-    ProvidedFile &operator[](int index) { return files[index]; }
+    int size() const { return _files.size(); }
+    const ProvidedFile &operator[](int index) const { return _files[index]; }
+    ProvidedFile &operator[](int index) { return _files[index]; }
 
-    void Clear() { files.clear(); }
-    void AppendFile(const ProvidedFile &file) { files.push_back(file); }
+    void Clear() { _files.clear(); }
+    void AppendFile(const ProvidedFile &file) { _files.push_back(file); }
     void AppendManifest(const ProvidedManifest &other);
     void AppendLocalZip(const std::string &zipPath, const std::string &rootDir);
 
@@ -146,20 +146,20 @@ public:
  */
 class TargetManifest {
     //arbitrary text attached to the manifest (only for debugging)
-    std::string comment;
+    std::string _comment;
     //set of files described in the manifest
-    std::vector<TargetFile> files;
+    std::vector<TargetFile> _files;
 
 public:
-    const std::string &GetComment() const { return comment; }
-    void SetComment(const std::string &text) { comment = text; }
+    const std::string &GetComment() const { return _comment; }
+    void SetComment(const std::string &text) { _comment = text; }
 
-    int size() const { return files.size(); }
-    const TargetFile &operator[](int index) const { return files[index]; }
-    TargetFile &operator[](int index) { return files[index]; }
+    int size() const { return _files.size(); }
+    const TargetFile &operator[](int index) const { return _files[index]; }
+    TargetFile &operator[](int index) { return _files[index]; }
 
-    void Clear() { files.clear(); }
-    void AppendFile(const TargetFile &file) { files.push_back(file); }
+    void Clear() { _files.clear(); }
+    void AppendFile(const TargetFile &file) { _files.push_back(file); }
     void AppendLocalZip(const std::string &zipPath, const std::string &rootDir, const std::string &packageName);
     void AppendManifest(const TargetManifest &other);
 
@@ -174,25 +174,25 @@ public:
  * Appends do NOT invalidate it.
  */
 template<class File, class Manifest> struct IndexIterator {
-    Manifest *manifest;
-    int index;
+    Manifest *_manifest;
+    int _index;
 
-    IndexIterator() : manifest(nullptr), index(0) {}
-    IndexIterator(Manifest &manifest, int index) : manifest(&manifest), index(index) {}
+    IndexIterator() : _manifest(nullptr), _index(0) {}
+    IndexIterator(Manifest &manifest, int index) : _manifest(&manifest), _index(index) {}
     IndexIterator(Manifest &manifest, const File *file) {
         if (file) {
-            this->manifest = &manifest;
-            this->index = file - &manifest[0];
-            TdmSyncAssert(index >= 0 && index < manifest.size());
+            _manifest = &manifest;
+            _index = file - &manifest[0];
+            TdmSyncAssert(_index >= 0 && _index < manifest.size());
         }
         else {
-            this->manifest = nullptr;
-            this->index = 0;
+            _manifest = nullptr;
+            _index = 0;
         }
     }
-    File& operator*() const { return (*manifest)[index]; }
-    File* operator->() const { return &(*manifest)[index]; }
-    explicit operator bool() const { return manifest != nullptr; }
+    File& operator*() const { return (*_manifest)[_index]; }
+    File* operator->() const { return &(*_manifest)[_index]; }
+    explicit operator bool() const { return _manifest != nullptr; }
 };
 typedef IndexIterator<TargetFile, TargetManifest> TargetIter;
 typedef IndexIterator<ProvidedFile, ProvidedManifest> ProvidedIter;
