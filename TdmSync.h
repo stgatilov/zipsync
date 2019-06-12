@@ -5,20 +5,11 @@
 
 namespace TdmSync {
 
+class LocalCache;
+
 enum class UpdateType {
     SameContents,       //uncompressed contents of every file must match (and compression settings too)
     SameCompressed,     //compressed contents and local file header must be bitwise the same
-};
-
-/**
- * Represents the local updater cache (physically present near installation).
- * Usually it contains:
- *   1. old files which are no longer used, but may be helpful to return back to previous version
- *   2. provided manifest for all the files in from p.1
- *   3. various manifests from remote places --- to avoid downloading them again
- */
-class LocalCache {
-    //TODO
 };
 
 /**
@@ -29,7 +20,7 @@ public:
     struct Match {
         //target file (surely not NULL)
         TargetIter target;
-        //provided file which will fulfill it (if NULL, then no match found)
+        //provided file which will fulfill it (NULL if no match found)
         ProvidedIter provided;
     };
 
@@ -42,7 +33,6 @@ private:
     //the root directory of installation being updated
     //all target files zip paths are treated relative to it
     std::string _rootDir;
-
     //which type of "sameness" we want to achieve
     UpdateType _updateType;
 

@@ -31,6 +31,8 @@ set(sources
     ZipUtils.cpp
     Manifest.h
     Manifest.cpp
+    LocalCache.h
+    LocalCache.cpp
     TdmSync.h
     TdmSync.cpp
 
