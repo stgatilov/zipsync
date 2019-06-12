@@ -35,24 +35,24 @@ public:
 
 private:
     //the target manifest being the goal of this update
-    TargetManifest targetMani;
+    TargetManifest _targetMani;
     //the provided manifest showing the current state of installation
     //note: it is changed during the update process
-    ProvidedManifest providedMani;
+    ProvidedManifest _providedMani;
     //the root directory of installation being updated
     //all target files zip paths are treated relative to it
-    std::string rootDir;
+    std::string _rootDir;
 
     //which type of "sameness" we want to achieve
-    UpdateType updateType;
+    UpdateType _updateType;
 
     //the best matching provided file for every target file
-    std::vector<Match> matches;
+    std::vector<Match> _matches;
 
     //the manifest containing provided files created by repacking process
-    ProvidedManifest repackedMani;
+    ProvidedManifest _repackedMani;
     //the manifest containing no-longer-needed files from target zips
-    ProvidedManifest removedMani;
+    ProvidedManifest _removedMani;
 
 public:
     //must be called prior to any usage of an instance
@@ -71,8 +71,8 @@ public:
 
 
 
-    int MatchCount() const { return matches.size(); }
-    const Match &GetMatch(int idx) const { return matches[idx]; }
+    int MatchCount() const { return _matches.size(); }
+    const Match &GetMatch(int idx) const { return _matches[idx]; }
 
 private:
     void ValidateFile(const TargetFile &want, const TargetFile &have) const;

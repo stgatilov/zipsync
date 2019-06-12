@@ -11,31 +11,31 @@
 namespace TdmSync {
 
 void UpdateProcess::Init(TargetManifest &&targetMani_, ProvidedManifest &&providedMani_, const std::string &rootDir_) {
-    targetMani = std::move(targetMani_);
-    providedMani = std::move(providedMani_);
-    rootDir = rootDir_;
+    _targetMani = std::move(targetMani_);
+    _providedMani = std::move(providedMani_);
+    _rootDir = rootDir_;
 
-    targetMani.ReRoot(rootDir);
+    _targetMani.ReRoot(_rootDir);
 
-    updateType = (UpdateType)0xDDDDDDDD;
-    matches.clear();
+    _updateType = (UpdateType)0xDDDDDDDD;
+    _matches.clear();
 }
 
 bool UpdateProcess::DevelopPlan(UpdateType type) {
-    updateType = type;
+    _updateType = type;
 
     //build index of target files: by zip path + file path inside zip
     std::map<std::string, const TargetFile*> pathToTarget;
-    for (int i = 0; i < targetMani.size(); i++) {
-        const TargetFile &tf = targetMani[i];
+    for (int i = 0; i < _targetMani.size(); i++) {
+        const TargetFile &tf = _targetMani[i];
         std::string fullPath = GetFullPath(tf.zipPath.abs, tf.filename);
         auto pib = pathToTarget.insert(std::make_pair(fullPath, &tf));
         TdmSyncAssertF(pib.second, "Duplicate target file at place %s", fullPath.c_str());
     }
 
     //find provided files which are already in-place
-    for (int i = 0; i < providedMani.size(); i++) {
-        ProvidedFile &pf = providedMani[i];
+    for (int i = 0; i < _providedMani.size(); i++) {
+        ProvidedFile &pf = _providedMani[i];
         if (pf.location != ProvidedLocation::Local)
             continue;
         std::string fullPath = GetFullPath(pf.zipPath.abs, pf.filename);
@@ -48,20 +48,20 @@ bool UpdateProcess::DevelopPlan(UpdateType type) {
 
     //build index of provided files (by hash on uncompressed file)
     std::map<HashDigest, std::vector<const ProvidedFile*>> pfIndex;
-    for (int i = 0; i < providedMani.size(); i++) {
-        const ProvidedFile &pf = providedMani[i];
+    for (int i = 0; i < _providedMani.size(); i++) {
+        const ProvidedFile &pf = _providedMani[i];
         pfIndex[pf.contentsHash].push_back(&pf);
     }
 
     //find matching provided file for every target file
-    matches.clear();
+    _matches.clear();
     bool fullPlan = true;
-    for (int i = 0; i < targetMani.size(); i++) {
-        const TargetFile &tf = targetMani[i];
+    for (int i = 0; i < _targetMani.size(); i++) {
+        const TargetFile &tf = _targetMani[i];
 
         auto iter = pfIndex.find(tf.contentsHash);
         if (iter == pfIndex.end()) {
-            matches.push_back(Match{TargetIter(targetMani, &tf), ProvidedIter()});
+            _matches.push_back(Match{TargetIter(_targetMani, &tf), ProvidedIter()});
             fullPlan = false;
             continue;
         }
@@ -70,7 +70,7 @@ bool UpdateProcess::DevelopPlan(UpdateType type) {
         int bestScore = 1000000000;
         const ProvidedFile *bestFile = nullptr;
         for (const ProvidedFile *pf : candidates) {
-            if (updateType == UpdateType::SameCompressed && !(pf->compressedHash == tf.compressedHash))
+            if (_updateType == UpdateType::SameCompressed && !(pf->compressedHash == tf.compressedHash))
                 continue;
             int score = int(pf->location);
             if (score < bestScore) {
@@ -78,7 +78,7 @@ bool UpdateProcess::DevelopPlan(UpdateType type) {
                 bestFile = pf;
             }
         }
-        matches.push_back(Match{TargetIter(targetMani, &tf), ProvidedIter(providedMani, bestFile)});
+        _matches.push_back(Match{TargetIter(_targetMani, &tf), ProvidedIter(_providedMani, bestFile)});
     }
 
     return fullPlan;
@@ -92,7 +92,7 @@ void UpdateProcess::ValidateFile(const TargetFile &want, const TargetFile &have)
     TdmSyncAssertF(want.contentsHash == have.contentsHash, "Wrong contents hash of %s after repack", fullPath.c_str());
     TdmSyncAssertF(want.fhContentsSize == have.fhContentsSize, "Wrong contents size of %s after repack", fullPath.c_str());
     TdmSyncAssertF(want.fhCrc32 == have.fhCrc32, "Wrong crc32 of %s after repack", fullPath.c_str());
-    if (updateType == UpdateType::SameCompressed) {
+    if (_updateType == UpdateType::SameCompressed) {
         TdmSyncAssertF(want.compressedHash == have.compressedHash, "Wrong compressed hash of %s after repack", fullPath.c_str());
         TdmSyncAssertF(want.fhCompressedSize == have.fhCompressedSize, "Wrong compressed size of %s after repack", fullPath.c_str());
     }
@@ -116,27 +116,27 @@ int CompressionLevelFromGpFlags(int flags) {
 
 void UpdateProcess::RepackZips() {
     //verify that we are ready to do repacking
-    TdmSyncAssertF(matches.size() == targetMani.size(), "RepackZips: DevelopPlan not called yet");
-    for (Match m : matches) {
+    TdmSyncAssertF(_matches.size() == _targetMani.size(), "RepackZips: DevelopPlan not called yet");
+    for (Match m : _matches) {
         std::string fullPath = GetFullPath(m.target->zipPath.abs, m.target->filename);
         TdmSyncAssertF(m.provided, "RepackZips: target file %s is not provided", fullPath.c_str());
         TdmSyncAssertF(m.provided->location == ProvidedLocation::Inplace || m.provided->location == ProvidedLocation::Local, "RepackZips: target file %s is not available locally", fullPath.c_str());
     }
 
     //group target files by their zips
-    std::sort(matches.begin(), matches.end(), [](const Match &a, const Match &b) {
+    std::sort(_matches.begin(), _matches.end(), [](const Match &a, const Match &b) {
         return TargetFile::IsLess_ZipFn(*a.target, *b.target);
     });
     std::map<std::string, std::vector<int>> zipToMatchIds;      //for every zip file: indices of all matches with target in it
-    for (int i = 0; i < matches.size(); i++) {
-        const std::string &zipPath = matches[i].target->zipPath.abs;
+    for (int i = 0; i < _matches.size(); i++) {
+        const std::string &zipPath = _matches[i].target->zipPath.abs;
         zipToMatchIds[zipPath].push_back(i);
     }
 
     //check which target zips need no change at all
     std::map<std::string, std::vector<const ProvidedFile*>> zipToProvided;
-    for (int i = 0; i < providedMani.size(); i++) {
-        zipToProvided[providedMani[i].zipPath.abs].push_back(&providedMani[i]);
+    for (int i = 0; i < _providedMani.size(); i++) {
+        zipToProvided[_providedMani[i].zipPath.abs].push_back(&_providedMani[i]);
     }
     std::vector<std::string> zipsDontChange;
     for (const auto &pZV : zipToMatchIds) {
@@ -144,7 +144,7 @@ void UpdateProcess::RepackZips() {
         const std::vector<int> &matchIds = pZV.second;
         int cntInplace = matchIds.size();
         for (int midx : matchIds) {
-            Match m = matches[midx];
+            Match m = _matches[midx];
             if (m.provided->location != ProvidedLocation::Inplace)
                 cntInplace--;
         }
@@ -162,14 +162,14 @@ void UpdateProcess::RepackZips() {
     //TODO: handle case when downloaded zip fits target zip perfectly
 
     //prepare manifest for repacked files
-    repackedMani.Clear();
-    removedMani.Clear();
+    _repackedMani.Clear();
+    _removedMani.Clear();
 
     //check how many provided files are used from every zip
     std::map<std::string, int> zipToMatchCnt;
     for (const auto &pZV : zipToMatchIds)
         for (int midx : pZV.second) {
-            Match m = matches[midx];
+            Match m = _matches[midx];
             zipToMatchCnt[m.provided->zipPath.abs]++;
         }
 
@@ -186,7 +186,7 @@ void UpdateProcess::RepackZips() {
         //copy all files one-by-one
         std::map<int, bool> copiedRaw;
         for (int midx : matchIds) {
-            Match m = matches[midx];
+            Match m = _matches[midx];
 
             //open provided file for reading (TODO: optimize?)
             UnzFileHolder zf(m.provided->zipPath.abs.c_str());
@@ -211,7 +211,7 @@ void UpdateProcess::RepackZips() {
             bool useRaw = false;
             if (m.provided->compressedHash == m.target->compressedHash)
                 useRaw = true;  //bitwise same
-            if (updateType == UpdateType::SameContents && m.target->fhCompressionMethod == info.compression_method && m.target->fhGeneralPurposeBitFlag == info.flag)
+            if (_updateType == UpdateType::SameContents && m.target->fhCompressionMethod == info.compression_method && m.target->fhGeneralPurposeBitFlag == info.flag)
                 useRaw = true;  //same compression level
 
             //prepare metadata for target file
@@ -247,14 +247,14 @@ void UpdateProcess::RepackZips() {
         SAFE_CALL(unzGoToFirstFile(zf));
         for (int i = 0; i < matchIds.size(); i++) {
             int midx = matchIds[i];
-            Match &m = matches[midx];
+            Match &m = _matches[midx];
             if (i > 0) SAFE_CALL(unzGoToNextFile(zf));
 
             //analyze current file
             bool needsRehashCompressed = !copiedRaw[midx];
             TargetFile targetNew;
             ProvidedFile providedNew;
-            providedNew.zipPath = targetNew.zipPath = PathAR::FromAbs(zipPathOut, rootDir);
+            providedNew.zipPath = targetNew.zipPath = PathAR::FromAbs(zipPathOut, _rootDir);
             providedNew.location = ProvidedLocation::Local;
             targetNew.package = "[repacked]";
             providedNew.contentsHash = targetNew.contentsHash = m.target->contentsHash;
@@ -264,10 +264,10 @@ void UpdateProcess::RepackZips() {
             ValidateFile(*m.target, targetNew);
 
             //add info about file to special manifest
-            repackedMani.AppendFile(providedNew);
+            _repackedMani.AppendFile(providedNew);
             //switch the match for the target file to this new file
             zipToMatchCnt[m.provided->zipPath.abs]--;
-            m.provided = ProvidedIter(repackedMani, repackedMani.size() - 1);
+            m.provided = ProvidedIter(_repackedMani, _repackedMani.size() - 1);
         }
         zf.reset();
 
