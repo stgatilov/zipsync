@@ -29,6 +29,9 @@ void HashDigest::Parse(const char *hex) {
         _data[i] = value;
     }
 }
+void HashDigest::Clear() {
+    memset(_data, 0, sizeof(_data));
+}
 
 Hasher::Hasher() {
     blake2s_init(&_state, sizeof(HashDigest::_data));

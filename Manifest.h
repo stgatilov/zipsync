@@ -17,7 +17,11 @@ enum class ProvidedLocation {
     Inplace = 0,    //local zip file in the place where it should be
     Local = 1,      //local zip file (e.g. inside local cache of old versions)
     RemoteHttp = 2, //file remotely available via HTTP 1.1+
+
     Nowhere,        //(should never be used)
+
+    Repacked,       //internal: file is on its place in "repacked" zip (not yet renamed back)
+    Reduced,        //internal: file is in "reduced" zip, to be moved to cache later
 };
 
 /**

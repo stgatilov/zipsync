@@ -26,6 +26,7 @@ public:
     bool operator== (const HashDigest &other) const;
     std::string Hex() const;
     void Parse(const char *hex);
+    void Clear();
 };
 
 /**

@@ -63,4 +63,12 @@ void ParseFullPath(const std::string &fullPath, std::string &zipPath, std::strin
     filename = fullPath.substr(pos + 2);
 }
 
+bool IfExists(const std::string &path) {
+    FILE *f = fopen(path.c_str(), "rb");
+    if (!f)
+        return false;
+    fclose(f);
+    return true;
+}
+
 }

@@ -112,12 +112,12 @@ public:
         std::vector<int> _matchIds;
 
         std::string _zipPathRepacked;
-        std::string _zipPathRemoved;
+        std::string _zipPathReduced;
 
         //number of provided files in this zip still needed in future
         int _usedCnt = 0;
         bool _repacked = false;
-        bool _removed = false;
+        bool _reduced = false;
 
         bool operator< (const ZipInfo &b) const {
             return _zipPath < b._zipPath;
@@ -138,11 +138,14 @@ public:
     std::map<std::string, int> _zipToUsedCnt;*/
     //indexed as matches: true if provided file was copied in "raw" mode, false if in recompressing mode
     std::vector<bool> _copiedRaw;
+    //how many (local) provided files have specified compressed hash
+    //note: includes files from repacked and reduced zips
+    std::map<HashDigest, int> _hashProvidedCnt;
 
     //the manifest containing provided files created by repacking process
     ProvidedManifest _repackedMani;
     //the manifest containing no-longer-needed files from target zips
-    ProvidedManifest _removedMani;
+    ProvidedManifest _reducedMani;
 
 
     Repacker(UpdateProcess &owner) : _owner(owner) {}
@@ -167,13 +170,18 @@ public:
 
         //create ZipInfo structure for every zip involved
         std::set<std::string> zipPaths = _owner._managedZips;
-        for (int i = 0; i < _owner._providedMani.size(); i++)
-            zipPaths.insert(_owner._providedMani[i].zipPath.abs);
+        for (int i = 0; i < _owner._providedMani.size(); i++) {
+            const ProvidedFile &pf = _owner._providedMani[i];
+            if (pf.location == ProvidedLocation::Inplace || pf.location == ProvidedLocation::Local) {
+                _hashProvidedCnt[pf.compressedHash]++;
+                zipPaths.insert(pf.zipPath.abs);
+            }
+        }
         for (const std::string &zp : zipPaths) {
             ZipInfo zip;
             zip._zipPath = zp;
             zip._zipPathRepacked = PrefixFile(zp, "__repacked__");
-            zip._zipPathRemoved = PrefixFile(zp, "__removed__");
+            zip._zipPathReduced = PrefixFile(zp, "__reduced__");
             _zips.push_back(zip);
         }
 
@@ -299,7 +307,7 @@ public:
             TargetFile targetNew;
             ProvidedFile providedNew;
             providedNew.zipPath = targetNew.zipPath = PathAR::FromAbs(zip._zipPathRepacked, _owner._rootDir);
-            providedNew.location = ProvidedLocation::Local;
+            providedNew.location = ProvidedLocation::Repacked;
             targetNew.package = "[repacked]";
             providedNew.contentsHash = targetNew.contentsHash = m.target->contentsHash;
             providedNew.compressedHash = targetNew.compressedHash = m.target->compressedHash;   //will be recomputed if needsRehashCompressed
@@ -307,14 +315,17 @@ public:
             //check that it indeed matches the target
             ValidateFile(*m.target, targetNew);
 
-            //add info about file to special manifest
-            _repackedMani.AppendFile(providedNew);
-            //switch the match for the target file to this new file
-            m.provided = ProvidedIter(_repackedMani, _repackedMani.size() - 1);
             //decrement ref count on zip (which might allow to "reduce" it in ReduceOldZips)
             int &usedCnt = FindZip(m.provided->zipPath.abs)._usedCnt;
             TdmSyncAssert(usedCnt >= 0);
             usedCnt--;
+            //increment ref count on compressed hash
+            _hashProvidedCnt[providedNew.compressedHash]++;
+
+            //add info about file to special manifest
+            _repackedMani.AppendFile(providedNew);
+            //switch the match for the target file to this new file
+            m.provided = ProvidedIter(_repackedMani, _repackedMani.size() - 1);
         }
         zf.reset();
     }
@@ -324,38 +335,137 @@ public:
         for (ZipInfo &zip : _zips) {
             if (!zip._managed)
                 continue;       //no targets, not repacked, don't remove
-            if (zip._removed)
-                continue;       //already reduced/removed
+            if (zip._reduced)
+                continue;       //already reduced
             if (zip._usedCnt > 0)
                 continue;       //original zip still needed as source
 
-            UnzFileHolder zf(zip._zipPath.c_str());
-            ZipFileHolder zfOut(zip._zipPathRemoved.c_str());
+            if (IfExists(zip._zipPath)) {
+                UnzFileHolder zf(zip._zipPath.c_str());
+                ZipFileHolder zfOut(zip._zipPathReduced.c_str());
 
-            //go over files and copy ??? one-by-one
-            SAFE_CALL(unzGoToFirstFile(zf));
-            while (1) {
-                unz_file_info info;
-                char filename[SIZE_PATH];
-                SAFE_CALL(unzGetCurrentFileInfo(zf, &info, filename, sizeof(filename), NULL, 0, NULL, 0));
-                minizipCopyFile(zf, zfOut,
-                    filename,
-                    info.compression_method, info.flag,
-                    info.internal_fa, info.external_fa, info.dosDate,
-                    true, info.crc, info.uncompressed_size
-                );
-                int res = unzGoToNextFile(zf);
-                if (res == UNZ_END_OF_LIST_OF_FILE)
-                    break;
-                SAFE_CALL(res);
+                //go over files and copy unique ones to reduced zip
+                std::vector<ProvidedFile> copiedFiles;
+                SAFE_CALL(unzGoToFirstFile(zf));
+                while (1) {
+                    //find current file in provided manifest
+                    uint32_t range[2];
+                    unzGetCurrentFilePosition(zf, &range[0], NULL, &range[1]);
+                    ProvidedIter found;
+                    for (ProvidedIter pf : zip._provided) {
+                        if (pf->byterange[0] == range[0] && pf->byterange[1] == range[1]) {
+                            TdmSyncAssertF(!found, "Provided manifest of %s has duplicate byteranges", zip._zipPath.c_str());
+                            found = pf;
+                        }
+                    }
+                    //check whether we should retain the file or remove it
+                    unz_file_info info;
+                    char filename[SIZE_PATH];
+                    SAFE_CALL(unzGetCurrentFileInfo(zf, &info, filename, sizeof(filename), NULL, 0, NULL, 0));
+                    TdmSyncAssertF(found, "Provided manifest of %s doesn't have file %s", zip._zipPath.c_str(), filename);
+                    int &usedCnt = _hashProvidedCnt.at(found->compressedHash);
+                    if (usedCnt == 1) {
+                        //not available otherwise -> repack
+                        minizipCopyFile(zf, zfOut,
+                            filename,
+                            info.compression_method, info.flag,
+                            info.internal_fa, info.external_fa, info.dosDate,
+                            true, info.crc, info.uncompressed_size
+                        );
+                        copiedFiles.push_back(*found);
+                    }
+                    else {
+                        //drop it: it will still be available
+                        usedCnt--;
+                    }
+                    int res = unzGoToNextFile(zf);
+                    if (res == UNZ_END_OF_LIST_OF_FILE)
+                        break;
+                    SAFE_CALL(res);
+                }
+
+                zf.reset();
+                zfOut.reset();
+
+                if (copiedFiles.empty()) {
+                    //empty reduced zip -> remove it
+                    int err = remove(zip._zipPathReduced.c_str());
+                    TdmSyncAssertF(err == 0, "Failed to remove empty reduced zip %s (code %d)", zip._zipPathReduced.c_str(), err);
+                }
+                else {
+                    //analyze reduced zip, add all files to manifest
+                    UnzFileHolder zf(zip._zipPathReduced.c_str());
+                    SAFE_CALL(unzGoToFirstFile(zf));
+                    for (int i = 0; i < copiedFiles.size(); i++) {
+                        ProvidedFile pf;
+                        TargetFile tf;
+                        AnalyzeCurrentFile(zf, pf, tf, false, false);
+                        pf.zipPath = PathAR::FromAbs(zip._zipPathReduced, _owner._rootDir);
+                        pf.location = ProvidedLocation::Reduced;
+                        pf.contentsHash = copiedFiles[i].contentsHash;
+                        pf.compressedHash = copiedFiles[i].compressedHash;
+                        _reducedMani.AppendFile(pf);
+                        SAFE_CALL(unzGoToNextFile(zf));
+                    }
+
+                }
+
+                //remove the old file
+                int err = remove(zip._zipPath.c_str());
+                TdmSyncAssertF(err == 0, "Failed to remove zip %s (code %d)", zip._zipPath.c_str(), err);
+                //nullify all provided files from the removed zip
+                for (ProvidedIter pf : zip._provided) {
+                    pf->compressedHash.Clear();
+                    pf->contentsHash.Clear();
+                    pf->byterange[0] = pf->byterange[1] = 0;
+                    pf->location = ProvidedLocation::Nowhere;
+                }
             }
 
-            zf.reset();
-            zfOut.reset();
-            //TODO: remove file?
-            //TODO: rewrite manifests?
-            zip._removed = true;
+            zip._reduced = true;
         }
+    }
+
+    void RenameRepackedZips() {
+        //see which target zip-s have contents no longer needed
+        for (ZipInfo &zip : _zips) {
+            if (!zip._repacked)
+                continue;       //not repacked (yet?)
+            if (!zip._reduced)
+                continue;       //not reduced original yet
+
+            TdmSyncAssertF(!IfExists(zip._zipPath), "Zip %s exists immediately before renaming repacked file", zip._zipPath.c_str());
+            int err = rename(zip._zipPathRepacked.c_str(), zip._zipPath.c_str());
+            TdmSyncAssertF(err == 0, "Failed to rename zip %s to %s (code %d)", zip._zipPathRepacked.c_str(), zip._zipPath.c_str(), err);
+            //update provided files in repacked zip (all of them must be among matches by now)
+            for (int midx : zip._matchIds) {
+                ProvidedFile &pf = *_owner._matches[midx].provided;
+                pf.zipPath = PathAR::FromAbs(zip._zipPath, _owner._rootDir);
+                pf.location = ProvidedLocation::Inplace;
+            }
+        }
+    }
+
+    void RewriteProvidedManifest() {
+        ProvidedManifest newProvidedMani;
+
+        for (int i = 0; i < _repackedMani.size(); i++)
+            newProvidedMani.AppendFile(std::move(_repackedMani[i]));
+        _repackedMani.Clear();
+        for (int i = 0; i < _reducedMani.size(); i++)
+            newProvidedMani.AppendFile(std::move(_reducedMani[i]));
+        _reducedMani.Clear();
+        for (int i = 0; i < _owner._providedMani.size(); i++) {
+            ProvidedFile &pf = _owner._providedMani[i];
+            if (pf.location == ProvidedLocation::Nowhere)
+                continue;       //was removed during zip-reduce
+            newProvidedMani.AppendFile(std::move(pf));
+        }
+        _owner._providedMani.Clear();
+
+        _owner._providedMani = std::move(newProvidedMani);
+        //TODO: do we need matches afterwards?
+        _owner._matches.clear();
     }
 
     void DoAll() {
@@ -365,7 +475,7 @@ public:
 
         //prepare manifest for repacked files
         _repackedMani.Clear();
-        _removedMani.Clear();
+        _reducedMani.Clear();
 
         //iterate over all zips and repack them
         for (ZipInfo &zip : _zips) {
@@ -375,6 +485,9 @@ public:
             AnalyzeRepackedZip(zip);
             ReduceOldZips();
         }
+
+        RenameRepackedZips();
+        RewriteProvidedManifest();
     }
 };
 
