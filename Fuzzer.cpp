@@ -19,9 +19,11 @@ class FuzzerImpl {
     std::mt19937 _rnd;
 
 public:
-    template<class T> T RandomFrom(const std::vector<T> &cont) {
+    template<class C> const typename C::value_type & RandomFrom(const C &cont) {
         int idx = IntD(0, cont.size() - 1)(_rnd);
-        return cont[idx];
+        auto iter = cont.cbegin();
+        std::advance(iter, idx);
+        return *iter;
     }
 
     std::vector<int> GenPartition(int sum, int cnt, int minV = 0) {
@@ -183,13 +185,13 @@ rank 	  lemma / word 	PoS 	freq 	dispersion
         InZipParams params;
         std::vector<uint8_t> contents;
     };
-    typedef std::map<std::string, InZipFile> InZipState;
+    typedef std::vector<std::pair<std::string, InZipFile>> InZipState;
     typedef std::map<std::string, InZipState> DirState;
 
     DirState GenTargetState(int numFiles, int numZips) {
         std::vector<std::string> zipPaths = GenPaths(numZips, ".zip");
         std::vector<int> fileCounts = GenPartition(numFiles, numZips);
-        DirState dirstate;
+        DirState state;
         for (int i = 0; i < numZips; i++) {
             int k = fileCounts[i];
             InZipState inzip;
@@ -197,11 +199,77 @@ rank 	  lemma / word 	PoS 	freq 	dispersion
             for (int j = 0; j < k; j++) {
                 auto params = GenInZipParams();
                 auto contents = GenFileContents();
-                inzip[filePaths[j]] = InZipFile{std::move(params), std::move(contents)};
+                inzip.emplace_back(filePaths[j], InZipFile{std::move(params), std::move(contents)});
             }
-            dirstate[zipPaths[i]] = std::move(inzip);
+            state[zipPaths[i]] = std::move(inzip);
         }
-        return dirstate;
+        return state;
+    }
+
+    DirState GenMutatedState(const DirState &source) {
+        DirState state;
+
+        std::vector<std::string> appendableZips;
+
+        int sameZips = IntD(0, source.size() * 2/3)(_rnd);
+        for (int i = 0; i < sameZips; i++) {
+            bool samePath = (IntD(0, 99)(_rnd) < 75);
+            bool appendable = (IntD(0, 99)(_rnd) < 50);
+            bool incomplete = (IntD(0, 99)(_rnd) < 30);
+            const auto &pPZ = RandomFrom(source);
+            std::string filename = (samePath ? pPZ.first : GenPaths(1)[0]);
+            InZipState inzip = pPZ.second;
+            if (incomplete) {
+                int removeCnt = IntD(0, inzip.size()/2)(_rnd);
+                for (int j = 0; j < removeCnt; j++)
+                    inzip.erase(inzip.begin() + IntD(0, inzip.size()-1)(_rnd));
+            }
+            if (appendable)
+                appendableZips.push_back(filename);
+            state[filename] = std::move(inzip);
+        }
+
+        std::vector<InZipState::const_iterator> sourceFiles;
+        std::vector<std::string> candidatePaths;
+        for (const auto &pPZ : source) {
+            const auto &files = pPZ.second;
+            for (auto iter = files.cbegin(); iter != files.cend(); iter++) {
+                sourceFiles.push_back(iter);
+                candidatePaths.push_back(iter->first);
+            }
+        }
+        {
+            auto np = GenPaths(candidatePaths.size() + 1);
+            candidatePaths.insert(candidatePaths.end(), np.begin(), np.end());
+        }
+
+        std::vector<InZipFile> appendFiles;
+        int sameFiles = IntD(0, sourceFiles.size())(_rnd);
+        for (int i = 0; i < sameFiles; i++) {
+            auto iter = RandomFrom(sourceFiles);
+            InZipParams params = IntD(0, 1)(_rnd) ? iter->second.params : GenInZipParams();
+            appendFiles.push_back(InZipFile{params, iter->second.contents});
+        }
+        int rndFiles = IntD(0, sourceFiles.size())(_rnd);
+        for (int i = 0; i < rndFiles; i++) {
+            auto params = GenInZipParams();
+            auto contents = GenFileContents();
+            appendFiles.push_back(InZipFile{params, std::move(contents)});
+        }
+
+        {
+            auto np = GenPaths(appendableZips.size() + 1, ".zip");
+            appendableZips.insert(appendableZips.end(), np.begin(), np.end());
+        }
+        for (auto& f : appendFiles) {
+            std::string zipPath = RandomFrom(appendableZips);
+            InZipState &inzip = state[zipPath];
+            std::string path = RandomFrom(candidatePaths);
+            int pos = IntD(0, 1)(_rnd) || inzip.empty() ? inzip.size() : IntD(0, inzip.size()-1)(_rnd);
+            inzip.insert(inzip.begin() + pos, std::make_pair(std::move(path), std::move(f)));
+        }
+
+        return state;
     }
 };
 
@@ -210,7 +278,8 @@ void Fuzz() {
     while (1) {
         //auto res = impl.GenPaths(10);
         //auto res = impl.GenFileContents();
-        auto res = impl.GenTargetState(50, 10);
+        auto target = impl.GenTargetState(50, 10);
+        auto providing = impl.GenMutatedState(target);
     }
 }
 
