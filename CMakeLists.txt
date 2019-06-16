@@ -40,11 +40,11 @@ set(sources
 )
 
 set(tests_sources
-    tests.cpp
+    TestsMain.cpp
 )
 
 set(playground_sources
-    main.cpp
+    PlaygroundMain.cpp
 )
 
 
