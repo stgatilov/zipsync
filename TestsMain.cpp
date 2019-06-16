@@ -6,11 +6,16 @@
 
 #include "StdFilesystem.h"
 #include "TdmSync.h"
+#include "Fuzzer.h"
 using namespace TdmSync;
 
 #include "zip.h"
 #include "blake2.h"
 
+
+TEST_CASE("FuzzTemp") {
+    Fuzz();
+}
 
 TEST_CASE("PathAR::IsHttp") {
     CHECK(PathAR::IsHttp("http://darkmod.taaaki.za.net/release") == true);

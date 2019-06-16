@@ -40,6 +40,8 @@ set(sources
 )
 
 set(tests_sources
+    Fuzzer.cpp
+    Fuzzer.h
     TestsMain.cpp
 )
 
