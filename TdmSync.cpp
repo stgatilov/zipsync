@@ -237,6 +237,8 @@ public:
 #endif
 
     void RepackZip(ZipInfo &zip) {
+        //ensure all directories are created if missing
+        CreateDirectoriesForFile(zip._zipPath, _owner._rootDir);
         //create new zip archive (it will contain results of repacking)
         ZipFileHolder zfOut(zip._zipPathRepacked.c_str());
 
@@ -404,9 +406,9 @@ public:
                         pf.contentsHash = copiedFiles[i].contentsHash;
                         pf.compressedHash = copiedFiles[i].compressedHash;
                         _reducedMani.AppendFile(pf);
-                        SAFE_CALL(unzGoToNextFile(zf));
+                        if (i+1 < copiedFiles.size())
+                            SAFE_CALL(unzGoToNextFile(zf));
                     }
-
                 }
 
                 //remove the old file
@@ -432,8 +434,14 @@ public:
             if (!zip._reduced)
                 continue;       //not reduced original yet
 
-            TdmSyncAssertF(!IfFileExists(zip._zipPath), "Zip %s exists immediately before renaming repacked file", zip._zipPath.c_str());
-            RenameFile(zip._zipPathRepacked, zip._zipPath);
+            if (zip._matchIds.empty()) {
+                //we don't create empty zips (minizip support issue)
+                RemoveFile(zip._zipPathRepacked);
+            }
+            else {
+                TdmSyncAssertF(!IfFileExists(zip._zipPath), "Zip %s exists immediately before renaming repacked file", zip._zipPath.c_str());
+                RenameFile(zip._zipPathRepacked, zip._zipPath);
+            }
             //update provided files in repacked zip (all of them must be among matches by now)
             for (int midx : zip._matchIds) {
                 ProvidedFile &pf = *_owner._matches[midx].provided;
@@ -475,9 +483,12 @@ public:
         _reducedMani.Clear();
 
         //iterate over all zips and repack them
+        ReduceOldZips();
         for (ZipInfo &zip : _zips) {
             if (!zip._managed)
                 continue;   //no targets, no need to remove
+            if (zip._matchIds.empty())
+                continue;   //minizip doesn't support empty zip
             RepackZip(zip);
             AnalyzeRepackedZip(zip);
             ReduceOldZips();
