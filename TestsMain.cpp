@@ -13,8 +13,29 @@ using namespace TdmSync;
 #include "blake2.h"
 
 
+#include <stdio.h>  /* defines FILENAME_MAX */
+#ifdef _WIN32
+#include <direct.h>
+#define getcwd _getcwd
+#else
+#include <unistd.h>
+#endif
+//TODO: move it somewhere
+stdext::path GetCwd() {
+    char buffer[4096];
+    char *ptr = getcwd(buffer, sizeof(buffer));
+    return ptr;
+}
+stdext::path GetTempDir() {
+    int timestamp = std::chrono::high_resolution_clock::now().time_since_epoch().count() / 1000 % 1000000000;
+    static stdext::path where = GetCwd() / "__temp__" / std::to_string(timestamp);
+    return where;
+}
+
+
+
 TEST_CASE("FuzzTemp") {
-    Fuzz();
+    Fuzz((GetTempDir()).string());
 }
 
 TEST_CASE("PathAR::IsHttp") {
@@ -186,25 +207,6 @@ TEST_CASE("TargetManifest: Read/Write") {
         IniData newIni = newMani.WriteToIni();
         CHECK(savedIni == newIni);
     }
-}
-
-#include <stdio.h>  /* defines FILENAME_MAX */
-#ifdef _WIN32
-#include <direct.h>
-#define getcwd _getcwd
-#else
-#include <unistd.h>
-#endif
-//TODO: move it somewhere
-stdext::path GetCwd() {
-    char buffer[4096];
-    char *ptr = getcwd(buffer, sizeof(buffer));
-    return ptr;
-}
-stdext::path GetTempDir() {
-    int timestamp = std::chrono::high_resolution_clock::now().time_since_epoch().count() / 1000 % 1000000000;
-    static stdext::path where = GetCwd() / "__temp__" / std::to_string(timestamp);
-    return where;
 }
 
 TEST_CASE("AppendManifestsFromLocalZip") {

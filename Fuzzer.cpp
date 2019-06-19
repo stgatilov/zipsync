@@ -5,8 +5,9 @@
 #include <set>
 #include <map>
 #include "StdString.h"
+#include "StdFilesystem.h"
 #include "tsassert.h"
-#include "unzip.h"
+#include "TdmSync.h"
 #include "zip.h"
 
 
@@ -17,13 +18,19 @@ typedef std::uniform_real_distribution<double> DblD;
 
 class FuzzerImpl {
     std::mt19937 _rnd;
+    UpdateType _updateType;
 
 public:
-    template<class C> const typename C::value_type & RandomFrom(const C &cont) {
+    FuzzerImpl(UpdateType type) : _updateType() {}
+
+    template<class C> typename C::value_type & RandomFrom(C &cont) {
         int idx = IntD(0, cont.size() - 1)(_rnd);
-        auto iter = cont.cbegin();
+        auto iter = cont.begin();
         std::advance(iter, idx);
         return *iter;
+    }
+    template<class C> const typename C::value_type & RandomFrom(const C &cont) {
+        return RandomFrom(const_cast<C&>(cont));
     }
 
     std::vector<int> GenPartition(int sum, int cnt, int minV = 0) {
@@ -55,7 +62,7 @@ public:
         std::string res;
         int len = IntD(3, 10)(_rnd);
         for (int i = 0; i < len; i++) {
-            int t = IntD(0, 3)(_rnd);
+            int t = IntD(0, 2)(_rnd);   //TODO: enable spaces back
             char ch = 0;
             if (t == 0) ch = IntD('0', '9')(_rnd);
             if (t == 1) ch = IntD('a', 'z')(_rnd);
@@ -170,6 +177,13 @@ rank 	  lemma / word 	PoS 	freq 	dispersion
         uint32_t dosDate;
         uint16_t internalAttribs;
         uint32_t externalAttribs;
+
+        bool operator==(const InZipParams &b) const {
+            return (
+                std::tie(method, level, dosDate, internalAttribs, externalAttribs) == 
+                std::tie(b.method, b.level, b.dosDate, b.internalAttribs, b.externalAttribs)
+            );
+        }
     };
     InZipParams GenInZipParams() {
         InZipParams res;
@@ -178,6 +192,7 @@ rank 	  lemma / word 	PoS 	freq 	dispersion
         res.dosDate = IntD(INT_MIN, INT_MAX)(_rnd);
         res.internalAttribs = IntD(INT_MIN, INT_MAX)(_rnd);
         res.externalAttribs = IntD(INT_MIN, INT_MAX)(_rnd);
+        res.externalAttribs &= ~0xFF;   //zero 0-th byte: it indicates directories
         return res;
     }
 
@@ -187,6 +202,14 @@ rank 	  lemma / word 	PoS 	freq 	dispersion
     };
     typedef std::vector<std::pair<std::string, InZipFile>> InZipState;
     typedef std::map<std::string, InZipState> DirState;
+
+    bool DoFilesMatch(const InZipFile &a, const InZipFile &b) const {
+        if (a.contents != b.contents)
+            return false;
+        if (_updateType == UpdateType::SameCompressed && !(a.params == b.params))
+            return false;
+        return true;
+    }
 
     DirState GenTargetState(int numFiles, int numZips) {
         std::vector<std::string> zipPaths = GenPaths(numZips, ".zip");
@@ -231,8 +254,8 @@ rank 	  lemma / word 	PoS 	freq 	dispersion
 
         std::vector<InZipState::const_iterator> sourceFiles;
         std::vector<std::string> candidatePaths;
-        for (const auto &pPZ : source) {
-            const auto &files = pPZ.second;
+        for (const auto &zipPair : source) {
+            const auto &files = zipPair.second;
             for (auto iter = files.cbegin(); iter != files.cend(); iter++) {
                 sourceFiles.push_back(iter);
                 candidatePaths.push_back(iter->first);
@@ -271,15 +294,117 @@ rank 	  lemma / word 	PoS 	freq 	dispersion
 
         return state;
     }
+
+    bool AddMissingFiles(const DirState &target, std::vector<DirState*> provided, bool leaveMisses = false) {
+        std::vector<const InZipFile*> targetFiles;
+        for (const auto &zipPair : target)
+            for (const auto &filePair : zipPair.second)
+                targetFiles.push_back(&filePair.second);
+
+        std::vector<const InZipFile*> providedFiles;
+        for (const DirState *dir : provided) {
+            for (const auto &zipPair : *dir)
+                for (const auto &filePair : zipPair.second)
+                    providedFiles.push_back(&filePair.second);
+        }
+
+        int k = 0;
+        for (const InZipFile *tf : targetFiles) {
+            bool present = false;
+            for (const InZipFile *pf : providedFiles) {
+                if (DoFilesMatch(*tf, *pf))
+                    present = true;
+            }
+            if (!present)
+                targetFiles[k++] = tf;
+        }
+        targetFiles.resize(k);
+
+        if (targetFiles.empty())
+            return true;
+        if (leaveMisses)
+            targetFiles.resize(IntD(k/2, k-1)(_rnd));
+
+        auto filePaths = GenPaths(targetFiles.size());
+        for (int i = 0; i < targetFiles.size(); i++) {
+            DirState *dst = RandomFrom(provided);
+            std::string zipPath = GenPaths(1, ".zip")[0];
+            InZipState &inzip = (*dst)[zipPath];
+            std::string path = filePaths[i];
+            int pos = IntD(0, inzip.size())(_rnd);
+            inzip.insert(inzip.begin() + pos, std::make_pair(path, *targetFiles[i]));
+        }
+        return !leaveMisses;
+    }
+
+    void WriteState(const std::string &rootPath, const DirState &state, TargetManifest *targetMani, ProvidedManifest *providedMani) {
+        for (const auto &zipPair : state) {
+            PathAR zipPath = PathAR::FromRel(zipPair.first, rootPath);
+            stdext::create_directories(stdext::path(zipPath.abs).parent_path());
+
+            //note: minizip's unzip cannot work with empty zip files
+            if (zipPair.second.empty())
+                continue;
+
+            ZipFileHolder zf(zipPath.abs.c_str());
+            for (const auto &filePair : zipPair.second) {
+                const auto &params = filePair.second.params;
+                const auto &contents = filePair.second.contents;
+                zip_fileinfo info;
+                info.dosDate = params.dosDate;
+                info.internal_fa = params.internalAttribs;
+                info.external_fa = params.externalAttribs;
+                SAFE_CALL(zipOpenNewFileInZip(zf, filePair.first.c_str(), &info, NULL, 0, NULL, 0, NULL, params.method, params.level));
+                SAFE_CALL(zipWriteInFileInZip(zf, contents.data(), contents.size()));
+                SAFE_CALL(zipCloseFileInZip(zf));
+            }
+            zf.reset();
+
+            if (targetMani)
+                targetMani->AppendLocalZip(zipPath.abs, rootPath, "default");
+            if (providedMani)
+                providedMani->AppendLocalZip(zipPath.abs, rootPath);
+        }
+    }
 };
 
-void Fuzz() {
-    FuzzerImpl impl;
-    while (1) {
+void Fuzz(std::string where) {
+    FuzzerImpl impl(UpdateType::SameContents);
+    for (int attempt = 0; attempt < 1000000000; attempt++) {
         //auto res = impl.GenPaths(10);
         //auto res = impl.GenFileContents();
-        auto target = impl.GenTargetState(50, 10);
-        auto providing = impl.GenMutatedState(target);
+
+        auto targetState = impl.GenTargetState(50, 10);
+        auto provInplaceState = impl.GenMutatedState(targetState);
+        auto provLocalState = impl.GenMutatedState(targetState);
+        bool willSucceed = impl.AddMissingFiles(targetState, {&provInplaceState, &provLocalState});
+
+        TargetManifest targetMani;
+        ProvidedManifest providedMani;
+        std::string basePath = where + "/" + std::to_string(attempt);
+        impl.WriteState(basePath + "/target", targetState, &targetMani, nullptr);
+        impl.WriteState(basePath + "/inplace", provInplaceState, nullptr, &providedMani);
+        impl.WriteState(basePath + "/local", provLocalState, nullptr, &providedMani);
+
+        UpdateProcess update;
+        update.Init(TargetManifest(targetMani), ProvidedManifest(providedMani), basePath + "/inplace");
+        for (const auto &zipPair : provInplaceState)
+            update.AddManagedZip(basePath + "/inplace/" + zipPair.first);
+
+        bool success = update.DevelopPlan(UpdateType::SameContents);
+        TdmSyncAssert(success == willSucceed);
+        if (success) {
+            update.RepackZips();
+        }
+
+        auto resultPaths = stdext::recursive_directory_enumerate(basePath + "/inplace");
+        TargetManifest resultMani;
+        for (stdext::path filePath : resultPaths)
+            resultMani.AppendLocalZip(filePath.string(), basePath + "/inplace", "default");
+
+        IniData iniMust = targetMani.WriteToIni();
+        IniData iniHas = resultMani.WriteToIni();
+        TdmSyncAssert(iniMust == iniHas);
     }
 }
 

@@ -1,7 +1,10 @@
 #pragma once
 
+#include <string>
+
+
 namespace TdmSync {
 
-void Fuzz();
+void Fuzz(std::string where);
 
 }
