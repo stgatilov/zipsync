@@ -69,26 +69,26 @@ bool UpdateProcess::DevelopPlan(UpdateType type) {
     for (int i = 0; i < _targetMani.size(); i++) {
         const TargetFile &tf = _targetMani[i];
 
-        auto iter = pfIndex.find(tf.contentsHash);
-        if (iter == pfIndex.end()) {
-            _matches.push_back(Match{TargetIter(_targetMani, &tf), ProvidedIter()});
-            fullPlan = false;
-            continue;
-        }
-        const std::vector<const ProvidedFile*> &candidates = iter->second;
-
-        int bestScore = 1000000000;
         const ProvidedFile *bestFile = nullptr;
-        for (const ProvidedFile *pf : candidates) {
-            if (_updateType == UpdateType::SameCompressed && !(pf->compressedHash == tf.compressedHash))
-                continue;
-            int score = int(pf->location);
-            if (score < bestScore) {
-                bestScore = score;
-                bestFile = pf;
+        int bestScore = 1000000000;
+
+        auto iter = pfIndex.find(tf.contentsHash);
+        if (iter != pfIndex.end()) {
+            const std::vector<const ProvidedFile*> &candidates = iter->second;
+
+            for (const ProvidedFile *pf : candidates) {
+                if (_updateType == UpdateType::SameCompressed && !(pf->compressedHash == tf.compressedHash))
+                    continue;
+                int score = int(pf->location);
+                if (score < bestScore) {
+                    bestScore = score;
+                    bestFile = pf;
+                }
             }
         }
         _matches.push_back(Match{TargetIter(_targetMani, &tf), ProvidedIter(_providedMani, bestFile)});
+        if (!bestFile)
+            fullPlan = false;
     }
 
     return fullPlan;
