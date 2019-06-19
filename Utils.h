@@ -29,6 +29,9 @@ public:
     operator FILE*() const { return get(); }
 };
 
-bool IfExists(const std::string &path);
+//some filesystem utils
+bool IfFileExists(const std::string &path);
+void RemoveFile(const std::string &path);
+void RenameFile(const std::string &oldPath, const std::string &newPath);
 
 }

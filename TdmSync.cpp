@@ -340,7 +340,7 @@ public:
             if (zip._usedCnt > 0)
                 continue;       //original zip still needed as source
 
-            if (IfExists(zip._zipPath)) {
+            if (IfFileExists(zip._zipPath)) {
                 UnzFileHolder zf(zip._zipPath.c_str());
                 ZipFileHolder zfOut(zip._zipPathReduced.c_str());
 
@@ -389,8 +389,7 @@ public:
 
                 if (copiedFiles.empty()) {
                     //empty reduced zip -> remove it
-                    int err = remove(zip._zipPathReduced.c_str());
-                    TdmSyncAssertF(err == 0, "Failed to remove empty reduced zip %s (code %d)", zip._zipPathReduced.c_str(), err);
+                    RemoveFile(zip._zipPathReduced);
                 }
                 else {
                     //analyze reduced zip, add all files to manifest
@@ -411,8 +410,7 @@ public:
                 }
 
                 //remove the old file
-                int err = remove(zip._zipPath.c_str());
-                TdmSyncAssertF(err == 0, "Failed to remove zip %s (code %d)", zip._zipPath.c_str(), err);
+                RemoveFile(zip._zipPath);
                 //nullify all provided files from the removed zip
                 for (ProvidedIter pf : zip._provided) {
                     pf->compressedHash.Clear();
@@ -434,9 +432,8 @@ public:
             if (!zip._reduced)
                 continue;       //not reduced original yet
 
-            TdmSyncAssertF(!IfExists(zip._zipPath), "Zip %s exists immediately before renaming repacked file", zip._zipPath.c_str());
-            int err = rename(zip._zipPathRepacked.c_str(), zip._zipPath.c_str());
-            TdmSyncAssertF(err == 0, "Failed to rename zip %s to %s (code %d)", zip._zipPathRepacked.c_str(), zip._zipPath.c_str(), err);
+            TdmSyncAssertF(!IfFileExists(zip._zipPath), "Zip %s exists immediately before renaming repacked file", zip._zipPath.c_str());
+            RenameFile(zip._zipPathRepacked, zip._zipPath);
             //update provided files in repacked zip (all of them must be among matches by now)
             for (int midx : zip._matchIds) {
                 ProvidedFile &pf = *_owner._matches[midx].provided;
