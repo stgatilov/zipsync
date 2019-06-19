@@ -325,10 +325,10 @@ rank 	  lemma / word 	PoS 	freq 	dispersion
 
         if (targetFiles.empty())
             return true;
-        bool shouldSucceed = true;
+        bool surelySucceed = true;
         if (leaveMisses && IntD(0, 1)(_rnd)) {
             targetFiles.resize(IntD(k/2, k-1)(_rnd));
-            shouldSucceed = false;
+            surelySucceed = false;
         }
 
         auto filePaths = GenPaths(targetFiles.size());
@@ -340,7 +340,7 @@ rank 	  lemma / word 	PoS 	freq 	dispersion
             int pos = IntD(0, inzip.size())(_rnd);
             inzip.insert(inzip.begin() + pos, std::make_pair(path, *targetFiles[i]));
         }
-        return shouldSucceed;
+        return surelySucceed;
     }
 
     void WriteState(const std::string &rootPath, const DirState &state, TargetManifest *targetMani, ProvidedManifest *providedMani) {
@@ -375,6 +375,9 @@ rank 	  lemma / word 	PoS 	freq 	dispersion
 };
 
 void Fuzz(std::string where) {
+    int cntOverall = 0;
+    int cntSurelyOk = 0;
+    int cntActualOk = 0;
     for (int attempt = 0; attempt < 1000000000; attempt++) {
         FuzzerGenerator impl;
         impl._rnd.seed(attempt);
@@ -398,9 +401,15 @@ void Fuzz(std::string where) {
             update.AddManagedZip(basePath + "/inplace/" + zipPair.first);
 
         bool success = update.DevelopPlan(updateType);
-        TdmSyncAssert(success == willSucceed);
+        cntOverall++;
+        cntSurelyOk += willSucceed;
+        cntActualOk += success;
         if (success) {
             update.RepackZips();
+        }
+        else {
+            TdmSyncAssert(!willSucceed);
+            continue;
         }
 
         auto resultPaths = stdext::recursive_directory_enumerate(basePath + "/inplace");
