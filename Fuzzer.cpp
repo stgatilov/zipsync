@@ -372,8 +372,9 @@ rank 	  lemma / word 	PoS 	freq 	dispersion
 };
 
 void Fuzz(std::string where) {
-    FuzzerGenerator impl;
     for (int attempt = 0; attempt < 1000000000; attempt++) {
+        FuzzerGenerator impl;
+        impl._rnd.seed(attempt);
         auto updateType = (attempt % 2 ? UpdateType::SameCompressed : UpdateType::SameContents);
         impl._updateType = updateType;
         auto targetState = impl.GenTargetState(50, 10);
