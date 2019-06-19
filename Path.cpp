@@ -2,6 +2,12 @@
 #include "tsassert.h"
 #include "StdString.h"
 
+#ifdef _WIN32
+#include <direct.h>
+#else
+#include <sys/stat.h>
+#endif
+
 
 namespace TdmSync {
 
@@ -61,6 +67,52 @@ void ParseFullPath(const std::string &fullPath, std::string &zipPath, std::strin
     TdmSyncAssertF(pos != std::string::npos, "Cannot split fullname into zip path and filename: %s", fullPath.c_str());
     zipPath = fullPath.substr(0, pos);
     filename = fullPath.substr(pos + 2);
+}
+
+
+bool IfFileExists(const std::string &path) {
+    FILE *f = fopen(path.c_str(), "rb");
+    if (!f)
+        return false;
+    fclose(f);
+    return true;
+}
+
+void RemoveFile(const std::string &path) {
+    int res = remove(path.c_str());
+    TdmSyncAssertF(res == 0, "Failed to remove file %s (error %d)", path.c_str(), res);
+}
+
+void RenameFile(const std::string &oldPath, const std::string &newPath) {
+    int res = rename(oldPath.c_str(), newPath.c_str());
+    TdmSyncAssertF(res == 0, "Failed to rename file %s to %s (error %d)", oldPath.c_str(), newPath.c_str(), res);
+}
+
+bool CreateDir(const std::string &dirPath) {
+    int res = 0;
+#ifdef _WIN32
+    res = _mkdir(dirPath.c_str());
+#else
+    res = mkdir(dirPath.c_str(), DEFFILEMODE);
+#endif
+    if (res == -1)
+        res = errno;
+    if (res == EEXIST)
+        return false;
+    TdmSyncAssertF(res == 0, "Failed to create directory %s (error %d)", dirPath.c_str(), res);
+    return true;
+}
+
+void CreateDirectoriesForFile(const std::string &filePath, const std::string &rootPath) {
+    PathAR p = PathAR::FromAbs(filePath, rootPath);
+    std::vector<std::string> components;
+    stdext::split(components, p.rel, "/");
+    std::string curr = rootPath;
+    for (int i = 0; i+1 < components.size(); i++) {
+        curr += "/";
+        curr += components[i];
+        CreateDir(curr);
+    }
 }
 
 }
