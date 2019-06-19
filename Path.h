@@ -24,6 +24,4 @@ std::string PrefixFile(std::string absPath, std::string prefix);
 std::string GetFullPath(const std::string &zipPath, const std::string &filename);
 void ParseFullPath(const std::string &fullPath, std::string &zipPath, std::string &filename);
 
-bool IfExists(const std::string &path);
-
 }

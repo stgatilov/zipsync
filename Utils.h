@@ -29,4 +29,6 @@ public:
     operator FILE*() const { return get(); }
 };
 
+bool IfExists(const std::string &path);
+
 }

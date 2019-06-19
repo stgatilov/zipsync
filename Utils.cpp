@@ -14,4 +14,12 @@ StdioFileHolder::StdioFileHolder(const char *path, const char *mode)
     TdmSyncAssertF(get(), "Failed to open file \"%s\"", path);
 }
 
+bool IfExists(const std::string &path) {
+    FILE *f = fopen(path.c_str(), "rb");
+    if (!f)
+        return false;
+    fclose(f);
+    return true;
+}
+
 }
