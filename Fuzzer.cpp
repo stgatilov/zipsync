@@ -375,9 +375,6 @@ rank 	  lemma / word 	PoS 	freq 	dispersion
 };
 
 void Fuzz(std::string where) {
-    int cntOverall = 0;
-    int cntSurelyOk = 0;
-    int cntActualOk = 0;
     for (int attempt = 0; attempt < 1000000000; attempt++) {
         FuzzerGenerator impl;
         impl._rnd.seed(attempt);
@@ -401,17 +398,11 @@ void Fuzz(std::string where) {
             update.AddManagedZip(basePath + "/inplace/" + zipPair.first);
 
         bool success = update.DevelopPlan(updateType);
-        cntOverall++;
-        cntSurelyOk += willSucceed;
-        cntActualOk += success;
-        if (success) {
-            update.RepackZips();
-        }
-        else {
-            TdmSyncAssert(!willSucceed);
+        TdmSyncAssert(success == willSucceed);
+        if (!success)
             continue;
-        }
-
+        update.RepackZips();
+        
         auto resultPaths = stdext::recursive_directory_enumerate(basePath + "/inplace");
         TargetManifest resultMani;
         for (stdext::path filePath : resultPaths) {
