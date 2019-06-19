@@ -59,14 +59,20 @@ struct FuzzerGenerator {
         std::string res;
         int len = IntD(3, 10)(_rnd);
         for (int i = 0; i < len; i++) {
-            int t = IntD(0, 2)(_rnd);   //TODO: enable spaces back
+            int t = IntD(0, 3)(_rnd);
             char ch = 0;
             if (t == 0) ch = IntD('0', '9')(_rnd);
             if (t == 1) ch = IntD('a', 'z')(_rnd);
             if (t == 2) ch = IntD('A', 'Z')(_rnd);
-            if (t == 3) ch = ' ';
+            if (t == 3) ch = (IntD(0, 1)(_rnd) ? ' ' : '_');
             res += ch;
         }
+        //trailing spaces don't work well in Windows
+        if (res.front() == ' ') res.front() = '_';
+        if (res.back() == ' ') res.back() = '_';
+        //avoid Windows reserved names: CON, PRN, AUX, NUL, COM1, ...
+        if ((res.size() == 3 || res.size() == 4) && isalpha(res[0]) && isalpha(res[1]) && isalpha(res[2]))
+            res[0] = '_';
         return res;
     }
 
