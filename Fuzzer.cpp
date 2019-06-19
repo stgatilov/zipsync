@@ -409,7 +409,7 @@ void Fuzz(std::string where) {
             auto ClearCompressedHash = [](IniData &ini) {
                 for (auto& pSect : ini)
                     for (auto &pProp : pSect.second)
-                        if (pProp.first == "compressedHash")
+                        if (pProp.first == "compressedHash" || pProp.first == "compressedSize")
                             pProp.second = "(removed)";
             };
             ClearCompressedHash(iniMust);
