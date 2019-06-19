@@ -16,12 +16,9 @@ namespace TdmSync {
 typedef std::uniform_int_distribution<int> IntD;
 typedef std::uniform_real_distribution<double> DblD;
 
-class FuzzerImpl {
+struct FuzzerGenerator {
     std::mt19937 _rnd;
-    UpdateType _updateType;
-
-public:
-    FuzzerImpl(UpdateType type) : _updateType() {}
+    UpdateType _updateType = UpdateType::SameCompressed;
 
     template<class C> typename C::value_type & RandomFrom(C &cont) {
         int idx = IntD(0, cont.size() - 1)(_rnd);
@@ -369,11 +366,10 @@ rank 	  lemma / word 	PoS 	freq 	dispersion
 };
 
 void Fuzz(std::string where) {
-    FuzzerImpl impl(UpdateType::SameContents);
+    FuzzerGenerator impl;
     for (int attempt = 0; attempt < 1000000000; attempt++) {
-        //auto res = impl.GenPaths(10);
-        //auto res = impl.GenFileContents();
-
+        auto updateType = (attempt % 2 ? UpdateType::SameCompressed : UpdateType::SameContents);
+        impl._updateType = updateType;
         auto targetState = impl.GenTargetState(50, 10);
         auto provInplaceState = impl.GenMutatedState(targetState);
         auto provLocalState = impl.GenMutatedState(targetState);
@@ -391,7 +387,7 @@ void Fuzz(std::string where) {
         for (const auto &zipPair : provInplaceState)
             update.AddManagedZip(basePath + "/inplace/" + zipPair.first);
 
-        bool success = update.DevelopPlan(UpdateType::SameContents);
+        bool success = update.DevelopPlan(updateType);
         TdmSyncAssert(success == willSucceed);
         if (success) {
             update.RepackZips();
@@ -399,11 +395,30 @@ void Fuzz(std::string where) {
 
         auto resultPaths = stdext::recursive_directory_enumerate(basePath + "/inplace");
         TargetManifest resultMani;
-        for (stdext::path filePath : resultPaths)
+        for (stdext::path filePath : resultPaths) {
+            if (!stdext::is_regular_file(filePath))
+                continue;
+            if (stdext::starts_with(filePath.filename().string(), "__reduced__"))
+                continue;   //TODO;
             resultMani.AppendLocalZip(filePath.string(), basePath + "/inplace", "default");
+        }
 
         IniData iniMust = targetMani.WriteToIni();
         IniData iniHas = resultMani.WriteToIni();
+        if (updateType == UpdateType::SameContents) {
+            auto ClearCompressedHash = [](IniData &ini) {
+                for (auto& pSect : ini)
+                    for (auto &pProp : pSect.second)
+                        if (pProp.first == "compressedHash")
+                            pProp.second = "(removed)";
+            };
+            ClearCompressedHash(iniMust);
+            ClearCompressedHash(iniHas);
+        }
+        if (iniMust != iniHas) {
+            WriteIniFile((basePath + "/expected.ini").c_str(), iniMust);
+            WriteIniFile((basePath + "/obtained.ini").c_str(), iniHas);
+        }
         TdmSyncAssert(iniMust == iniHas);
     }
 }
