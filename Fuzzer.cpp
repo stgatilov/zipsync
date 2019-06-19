@@ -209,7 +209,7 @@ rank 	  lemma / word 	PoS 	freq 	dispersion
     bool DoFilesMatch(const InZipFile &a, const InZipFile &b) const {
         if (a.contents != b.contents)
             return false;
-        if (_updateType == UpdateType::SameCompressed && !(a.params == b.params))
+        if (_updateType == UpdateType::SameCompressed && !(a.params.method == b.params.method && a.params.level == b.params.level))
             return false;
         return true;
     }
@@ -325,8 +325,11 @@ rank 	  lemma / word 	PoS 	freq 	dispersion
 
         if (targetFiles.empty())
             return true;
-        if (leaveMisses)
+        bool shouldSucceed = true;
+        if (leaveMisses && IntD(0, 1)(_rnd)) {
             targetFiles.resize(IntD(k/2, k-1)(_rnd));
+            shouldSucceed = false;
+        }
 
         auto filePaths = GenPaths(targetFiles.size());
         for (int i = 0; i < targetFiles.size(); i++) {
@@ -337,7 +340,7 @@ rank 	  lemma / word 	PoS 	freq 	dispersion
             int pos = IntD(0, inzip.size())(_rnd);
             inzip.insert(inzip.begin() + pos, std::make_pair(path, *targetFiles[i]));
         }
-        return !leaveMisses;
+        return shouldSucceed;
     }
 
     void WriteState(const std::string &rootPath, const DirState &state, TargetManifest *targetMani, ProvidedManifest *providedMani) {
@@ -380,7 +383,7 @@ void Fuzz(std::string where) {
         auto targetState = impl.GenTargetState(50, 10);
         auto provInplaceState = impl.GenMutatedState(targetState);
         auto provLocalState = impl.GenMutatedState(targetState);
-        bool willSucceed = impl.AddMissingFiles(targetState, {&provInplaceState, &provLocalState});
+        bool willSucceed = impl.AddMissingFiles(targetState, {&provInplaceState, &provLocalState}, true);
 
         TargetManifest targetMani;
         ProvidedManifest providedMani;
