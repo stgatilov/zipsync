@@ -343,6 +343,31 @@ rank 	  lemma / word 	PoS 	freq 	dispersion
         return surelySucceed;
     }
 
+    static bool ArePathsCaseAliased(const std::string &pathA, const std::string &pathB) {
+#ifndef _WIN32
+        return false;  //case-sensitive
+#else
+        stdext::path a = pathA, b = pathB;
+        while (a != b) {
+            std::string sa = stdext::to_lower_copy(a.string());
+            std::string sb = stdext::to_lower_copy(b.string());
+            if (sa == sb)
+                return true;
+            a = a.parent_path();
+            b = b.parent_path();
+        }
+        return false;
+#endif
+    }
+    bool CheckForCaseAliasing(const DirState &state1, const DirState &state2) {
+        for (const auto &zp1 : state1) {
+            for (const auto &zp2 : state2)
+                if (ArePathsCaseAliased(zp1.first, zp2.first))
+                    return true;
+        }
+        return false;
+    }
+
     void WriteState(const std::string &rootPath, const DirState &state, TargetManifest *targetMani, ProvidedManifest *providedMani) {
         for (const auto &zipPair : state) {
             PathAR zipPath = PathAR::FromRel(zipPair.first, rootPath);
@@ -385,6 +410,16 @@ void Fuzz(std::string where) {
         auto provInplaceState = impl.GenMutatedState(targetState);
         auto provLocalState = impl.GenMutatedState(targetState);
         bool shouldSucceed = impl.AddMissingFiles(targetState, {&provInplaceState, &provLocalState}, true);
+
+        if (impl.CheckForCaseAliasing(targetState, targetState) || impl.CheckForCaseAliasing(provInplaceState, provInplaceState) || impl.CheckForCaseAliasing(provLocalState, provLocalState)) {
+            //some of the directories is expected to contain case-aliased paths: skip such case
+            continue;
+        }
+        if (impl.CheckForCaseAliasing(targetState, provInplaceState)) {
+            //some zip paths in updated directory and target directory are case-aliased
+            //while it does not prohibit the update, it would be hard to validate it due to case differences
+            continue;
+        }
 
         TargetManifest targetMani;
         ProvidedManifest providedMani;
