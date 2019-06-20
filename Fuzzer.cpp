@@ -343,19 +343,24 @@ rank 	  lemma / word 	PoS 	freq 	dispersion
         return surelySucceed;
     }
 
-    static bool ArePathsCaseAliased(const std::string &pathA, const std::string &pathB) {
+    static bool ArePathsCaseAliased(std::string pathA, std::string pathB) {
 #ifndef _WIN32
         return false;  //case-sensitive
 #else
-        stdext::path a = pathA, b = pathB;
-        while (a != b) {
-            std::string sa = stdext::to_lower_copy(a.string());
-            std::string sb = stdext::to_lower_copy(b.string());
-            if (sa == sb)
-                return true;
-            a = a.parent_path();
-            b = b.parent_path();
-        }
+        pathA += '/';
+        pathB += '/';
+        int k = 0;
+        //find common case-insensitive prefix
+        while (k < pathA.size() && k < pathB.size() && tolower(pathA[k]) == tolower(pathB[k]))
+            k++;
+        //trim end up to last slash
+        while (k > 0 && pathA[k-1] != '/')
+            k--;
+        //check that prefixes are same
+        std::string prefixA = pathA.substr(0, k);
+        std::string prefixB = pathB.substr(0, k);
+        if (prefixA != prefixB)
+            return true;
         return false;
 #endif
     }
