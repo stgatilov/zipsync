@@ -57,7 +57,7 @@ struct FuzzerGenerator {
 
     std::string GenName() {
         std::string res;
-        int len = IntD(3, 10)(_rnd);
+        int len = IntD(0, 1)(_rnd) ? IntD(3, 10)(_rnd) : IntD(1, 3)(_rnd);
         for (int i = 0; i < len; i++) {
             int t = IntD(0, 3)(_rnd);
             char ch = 0;
