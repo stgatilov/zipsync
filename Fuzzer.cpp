@@ -375,6 +375,7 @@ rank 	  lemma / word 	PoS 	freq 	dispersion
 };
 
 void Fuzz(std::string where) {
+    int cntTotal = 0, cntShouldSucceed = 0, cntActualSucceed = 0;
     for (int attempt = 0; attempt < 1000000000; attempt++) {
         FuzzerGenerator impl;
         impl._rnd.seed(attempt);
@@ -383,7 +384,7 @@ void Fuzz(std::string where) {
         auto targetState = impl.GenTargetState(50, 10);
         auto provInplaceState = impl.GenMutatedState(targetState);
         auto provLocalState = impl.GenMutatedState(targetState);
-        bool willSucceed = impl.AddMissingFiles(targetState, {&provInplaceState, &provLocalState}, true);
+        bool shouldSucceed = impl.AddMissingFiles(targetState, {&provInplaceState, &provLocalState}, true);
 
         TargetManifest targetMani;
         ProvidedManifest providedMani;
@@ -398,9 +399,14 @@ void Fuzz(std::string where) {
             update.AddManagedZip(basePath + "/inplace/" + zipPair.first);
 
         bool success = update.DevelopPlan(updateType);
-        TdmSyncAssert(success == willSucceed);
-        if (!success)
+        cntTotal++;  cntShouldSucceed += shouldSucceed;  cntActualSucceed += success;
+        if (!success) {
+            TdmSyncAssert(!shouldSucceed);
             continue;
+        }
+        double moreSuccessRatio = double(cntActualSucceed - cntShouldSucceed) / std::max(cntTotal, 200);
+        TdmSyncAssert(moreSuccessRatio <= 0.05);    //actually, this ratio is smaller than 1%
+        
         update.RepackZips();
         
         auto resultPaths = stdext::recursive_directory_enumerate(basePath + "/inplace");
