@@ -43,13 +43,6 @@ private:
     //the best matching provided file for every target file
     std::vector<Match> _matches;
 
-    /*
-    //the manifest containing provided files created by repacking process
-    ProvidedManifest _repackedMani;
-    //the manifest containing no-longer-needed files from target zips
-    ProvidedManifest _removedMani;
-    */
-
     class Repacker;
     friend class Repacker;
 
