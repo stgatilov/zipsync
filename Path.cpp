@@ -49,6 +49,11 @@ PathAR PathAR::FromRel(std::string relPath, std::string rootDir) {
     return res;
 }
 
+std::string PathAR::GetRootDir() const {
+    TdmSyncAssertF(abs.size() > rel.size() && rel == abs.substr(abs.size() - rel.size()), "Absolute path %s doesn't have relative path %s as prefix", abs.c_str(), rel.c_str());
+    return abs.substr(0, abs.size() - rel.size() - 1);
+}
+
 std::string PrefixFile(std::string absPath, std::string prefix) {
     size_t pos = absPath.find_last_of('/');
     if (pos != std::string::npos)

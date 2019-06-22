@@ -13,6 +13,7 @@ struct PathAR {
 
     static bool IsHttp(const std::string &path);
     bool IsUrl() const { return IsHttp(abs); }
+    std::string GetRootDir() const;
 
     static PathAR FromAbs(std::string absPath, std::string rootDir);
     static PathAR FromRel(std::string relPath, std::string rootDir);
