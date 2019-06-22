@@ -426,15 +426,15 @@ void Fuzz(std::string where) {
             continue;
         }
 
-        TargetManifest targetMani;
-        ProvidedManifest providedMani;
+        TargetManifest initialTargetMani;
+        ProvidedManifest initialProvidedMani;
         std::string basePath = where + "/" + std::to_string(attempt);
-        impl.WriteState(basePath + "/target", targetState, &targetMani, nullptr);
-        impl.WriteState(basePath + "/inplace", provInplaceState, nullptr, &providedMani);
-        impl.WriteState(basePath + "/local", provLocalState, nullptr, &providedMani);
+        impl.WriteState(basePath + "/target", targetState, &initialTargetMani, nullptr);
+        impl.WriteState(basePath + "/inplace", provInplaceState, nullptr, &initialProvidedMani);
+        impl.WriteState(basePath + "/local", provLocalState, nullptr, &initialProvidedMani);
 
         UpdateProcess update;
-        update.Init(TargetManifest(targetMani), ProvidedManifest(providedMani), basePath + "/inplace");
+        update.Init(TargetManifest(initialTargetMani), ProvidedManifest(initialProvidedMani), basePath + "/inplace");
         for (const auto &zipPair : provInplaceState)
             update.AddManagedZip(basePath + "/inplace/" + zipPair.first);
 
@@ -450,32 +450,57 @@ void Fuzz(std::string where) {
         update.RepackZips();
         
         auto resultPaths = stdext::recursive_directory_enumerate(basePath + "/inplace");
-        TargetManifest resultMani;
+        TargetManifest actualTargetMani;
+        ProvidedManifest actualProvidedMani;
         for (stdext::path filePath : resultPaths) {
             if (!stdext::is_regular_file(filePath))
                 continue;
-            if (stdext::starts_with(filePath.filename().string(), "__reduced__"))
-                continue;   //TODO;
-            resultMani.AppendLocalZip(filePath.string(), basePath + "/inplace", "default");
+            if (!stdext::starts_with(filePath.filename().string(), "__reduced__")) {
+                actualTargetMani.AppendLocalZip(filePath.string(), basePath + "/inplace", "default");
+            }
+            actualProvidedMani.AppendLocalZip(filePath.string(), basePath + "/inplace");
         }
 
-        IniData iniMust = targetMani.WriteToIni();
-        IniData iniHas = resultMani.WriteToIni();
+        auto ClearCompressedHash = [](IniData &ini) {
+            for (auto& pSect : ini)
+                for (auto &pProp : pSect.second)
+                    if (pProp.first == "compressedHash" || pProp.first == "compressedSize")
+                        pProp.second = "(removed)";
+        };
+
+        IniData iniTargetMust = initialTargetMani.WriteToIni();
+        IniData iniTargetHas = actualTargetMani.WriteToIni();
         if (updateType == UpdateType::SameContents) {
-            auto ClearCompressedHash = [](IniData &ini) {
-                for (auto& pSect : ini)
-                    for (auto &pProp : pSect.second)
-                        if (pProp.first == "compressedHash" || pProp.first == "compressedSize")
-                            pProp.second = "(removed)";
-            };
-            ClearCompressedHash(iniMust);
-            ClearCompressedHash(iniHas);
+            ClearCompressedHash(iniTargetMust);
+            ClearCompressedHash(iniTargetHas);
         }
-        if (iniMust != iniHas) {
-            WriteIniFile((basePath + "/expected.ini").c_str(), iniMust);
-            WriteIniFile((basePath + "/obtained.ini").c_str(), iniHas);
+        if (iniTargetMust != iniTargetHas) {
+            WriteIniFile((basePath + "/target_expected.ini").c_str(), iniTargetMust);
+            WriteIniFile((basePath + "/target_obtained.ini").c_str(), iniTargetHas);
         }
-        TdmSyncAssert(iniMust == iniHas);
+        TdmSyncAssert(iniTargetMust == iniTargetHas);
+
+        ProvidedManifest finalProvidedManifest = update.GetProvidedManifest();
+        ProvidedManifest trimmedProvidedManifest;
+        int k = 0;
+        for (int i = 0; i < finalProvidedManifest.size(); i++) {
+            const ProvidedFile &pf = finalProvidedManifest[i];
+            if (pf.zipPath.GetRootDir() == basePath + "/inplace")
+                trimmedProvidedManifest.AppendFile(pf);
+        }
+
+        IniData iniProvComputed = trimmedProvidedManifest.WriteToIni();
+        IniData iniProvActual = actualProvidedMani.WriteToIni();
+        if (updateType == UpdateType::SameContents) {
+            ClearCompressedHash(iniProvComputed);
+            ClearCompressedHash(iniProvActual);
+        }
+        if (iniProvComputed != iniProvActual) {
+            WriteIniFile((basePath + "/provided_computed.ini").c_str(), iniProvComputed);
+            WriteIniFile((basePath + "/provided_actual.ini").c_str(), iniProvActual);
+        }
+        TdmSyncAssert(iniProvComputed == iniProvActual);
+
     }
 }
 

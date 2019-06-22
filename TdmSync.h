@@ -63,6 +63,7 @@ public:
     void RemoveOldZips(const LocalCache *cache);
 
 
+    const ProvidedManifest &GetProvidedManifest() const { return _providedMani; }
 
     int MatchCount() const { return _matches.size(); }
     const Match &GetMatch(int idx) const { return _matches[idx]; }
