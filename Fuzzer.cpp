@@ -16,9 +16,28 @@ namespace TdmSync {
 typedef std::uniform_int_distribution<int> IntD;
 typedef std::uniform_real_distribution<double> DblD;
 
-struct FuzzerGenerator {
+template<class Mani, class Lambda> Mani FilterManifest(const Mani &srcMani, const Lambda &ifCopy) {
+    Mani res;
+    for (int i = 0; i < srcMani.size(); i++)
+        if (ifCopy(srcMani[i]))
+            res.AppendFile(srcMani[i]);
+    return res;
+}
+
+//==========================================================================================
+
+class FuzzerGenerator {
     std::mt19937 _rnd;
+protected:
     UpdateType _updateType = UpdateType::SameCompressed;
+
+public:
+    void SetSeed(int seed) {
+        _rnd.seed(seed);
+    }
+    void SetUpdateType(UpdateType type) {
+        _updateType = type;
+    }
 
     template<class C> typename C::value_type & RandomFrom(C &cont) {
         int idx = IntD(0, cont.size() - 1)(_rnd);
@@ -404,103 +423,175 @@ rank 	  lemma / word 	PoS 	freq 	dispersion
     }
 };
 
-void Fuzz(std::string where) {
-    int cntTotal = 0, cntShouldSucceed = 0, cntActualSucceed = 0;
-    for (int attempt = 0; attempt < 1000000000; attempt++) {
-        FuzzerGenerator impl;
-        impl._rnd.seed(attempt);
-        auto updateType = (attempt % 2 ? UpdateType::SameCompressed : UpdateType::SameContents);
-        impl._updateType = updateType;
-        auto targetState = impl.GenTargetState(50, 10);
-        auto provInplaceState = impl.GenMutatedState(targetState);
-        auto provLocalState = impl.GenMutatedState(targetState);
-        bool shouldSucceed = impl.AddMissingFiles(targetState, {&provInplaceState, &provLocalState}, true);
+//==========================================================================================
 
-        if (impl.CheckForCaseAliasing(targetState, targetState) || impl.CheckForCaseAliasing(provInplaceState, provInplaceState) || impl.CheckForCaseAliasing(provLocalState, provLocalState)) {
-            //some of the directories is expected to contain case-aliased paths: skip such case
-            continue;
-        }
-        if (impl.CheckForCaseAliasing(targetState, provInplaceState)) {
-            //some zip paths in updated directory and target directory are case-aliased
-            //while it does not prohibit the update, it would be hard to validate it due to case differences
-            continue;
-        }
+class Fuzzer : private FuzzerGenerator {
+    //directories where everything happens
+    std::string _baseDir;
+    std::string _rootTargetDir;
+    std::string _rootInplaceDir;
+    std::string _rootLocalDir;
 
-        TargetManifest initialTargetMani;
-        ProvidedManifest initialProvidedMani;
-        std::string basePath = where + "/" + std::to_string(attempt);
-        impl.WriteState(basePath + "/target", targetState, &initialTargetMani, nullptr);
-        impl.WriteState(basePath + "/inplace", provInplaceState, nullptr, &initialProvidedMani);
-        impl.WriteState(basePath + "/local", provLocalState, nullptr, &initialProvidedMani);
+    //directory contents: generated randomly
+    DirState _initialTargetState;
+    DirState _initialInplaceState;
+    DirState _initialLocalState;
+    bool _shouldUpdateSucceed;
 
-        UpdateProcess update;
-        update.Init(TargetManifest(initialTargetMani), ProvidedManifest(initialProvidedMani), basePath + "/inplace");
-        for (const auto &zipPair : provInplaceState)
-            update.AddManagedZip(basePath + "/inplace/" + zipPair.first);
+    //initial manifests passed to the updater
+    TargetManifest _initialTargetMani;
+    ProvidedManifest _initialProvidedMani;
 
-        bool success = update.DevelopPlan(updateType);
-        cntTotal++;  cntShouldSucceed += shouldSucceed;  cntActualSucceed += success;
-        if (!success) {
-            TdmSyncAssert(!shouldSucceed);
-            continue;
-        }
-        double moreSuccessRatio = double(cntActualSucceed - cntShouldSucceed) / std::max(cntTotal, 200);
-        TdmSyncAssert(moreSuccessRatio <= 0.05);    //actually, this ratio is smaller than 1%
-        
-        update.RepackZips();
-        
-        auto resultPaths = stdext::recursive_directory_enumerate(basePath + "/inplace");
-        TargetManifest actualTargetMani;
-        ProvidedManifest actualProvidedMani;
-        for (stdext::path filePath : resultPaths) {
-            if (!stdext::is_regular_file(filePath))
-                continue;
-            if (!stdext::starts_with(filePath.filename().string(), "__reduced__")) {
-                actualTargetMani.AppendLocalZip(filePath.string(), basePath + "/inplace", "default");
-            }
-            actualProvidedMani.AppendLocalZip(filePath.string(), basePath + "/inplace");
-        }
+    //the update class
+    std::unique_ptr<UpdateProcess> _updater;
 
+    //various counters (increased every run)
+    int _numCasesGenerated = 0;         //generated
+    int _numCasesValidated = 0;         //passed to updater (valid)
+    int _numCasesShouldSucceed = 0;     //should succeed according to prior knowledge
+    int _numCasesActualSucceed = 0;     //actually updated successfully
+
+    //various manifests after update
+    ProvidedManifest _finalComputedProvidedMani;    //computed by UpdateProcess during update
+    TargetManifest _finalActualTargetMani;          //real contents of "inplace" dir (without "reduced" zips)
+    ProvidedManifest _finalActualProvidedMani;      //real contents of "inplace" dir (includes "reduced" zips)
+
+    void AssertManifestsSame(IniData &&iniDataA, std::string dumpFnA, IniData &&iniDataB, std::string dumpFnB) const {
         auto ClearCompressedHash = [](IniData &ini) {
             for (auto& pSect : ini)
                 for (auto &pProp : pSect.second)
                     if (pProp.first == "compressedHash" || pProp.first == "compressedSize")
                         pProp.second = "(removed)";
         };
+        if (_updateType == UpdateType::SameContents) {
+            ClearCompressedHash(iniDataA);
+            ClearCompressedHash(iniDataB);
+        }
+        if (iniDataA != iniDataB) {
+            WriteIniFile((_baseDir + "/" + dumpFnA).c_str(), iniDataA);
+            WriteIniFile((_baseDir + "/" + dumpFnB).c_str(), iniDataB);
+        }
+        TdmSyncAssert(iniDataA == iniDataB);
+    }
 
-        IniData iniTargetMust = initialTargetMani.WriteToIni();
-        IniData iniTargetHas = actualTargetMani.WriteToIni();
-        if (updateType == UpdateType::SameContents) {
-            ClearCompressedHash(iniTargetMust);
-            ClearCompressedHash(iniTargetHas);
-        }
-        if (iniTargetMust != iniTargetHas) {
-            WriteIniFile((basePath + "/target_expected.ini").c_str(), iniTargetMust);
-            WriteIniFile((basePath + "/target_obtained.ini").c_str(), iniTargetHas);
-        }
-        TdmSyncAssert(iniTargetMust == iniTargetHas);
+public:
+    void GenerateInput(std::string baseDir, int seed) {
+        _baseDir = baseDir;
+        _rootTargetDir = _baseDir + "/target";
+        _rootInplaceDir = _baseDir + "/inplace";
+        _rootLocalDir = _baseDir + "/local";
 
-        ProvidedManifest finalProvidedManifest = update.GetProvidedManifest();
-        ProvidedManifest trimmedProvidedManifest;
-        int k = 0;
-        for (int i = 0; i < finalProvidedManifest.size(); i++) {
-            const ProvidedFile &pf = finalProvidedManifest[i];
-            if (pf.zipPath.GetRootDir() == basePath + "/inplace")
-                trimmedProvidedManifest.AppendFile(pf);
+        SetSeed(seed);
+        SetUpdateType(seed % 2 ? UpdateType::SameCompressed : UpdateType::SameContents);
+
+        _initialTargetState = GenTargetState(50, 10);
+        _initialInplaceState = GenMutatedState(_initialTargetState);
+        _initialLocalState = GenMutatedState(_initialTargetState);
+        _shouldUpdateSucceed = AddMissingFiles(_initialTargetState, {&_initialInplaceState, &_initialLocalState}, true);
+
+        _numCasesGenerated++;
+    }
+
+    bool ValidateInput() {
+        bool aliased = (
+            CheckForCaseAliasing(_initialTargetState, _initialTargetState) ||
+            CheckForCaseAliasing(_initialInplaceState, _initialInplaceState) ||
+            CheckForCaseAliasing(_initialLocalState, _initialLocalState)
+        );
+        if (aliased) {
+            //some of the directories is expected to contain case-aliased paths: skip such case
+            return false;
+        }
+        if (CheckForCaseAliasing(_initialTargetState, _initialInplaceState)) {
+            //some zip paths in updated directory and target directory are case-aliased
+            //while it does not prohibit the update, it would be hard to validate it due to case differences
+            return false;
         }
 
-        IniData iniProvComputed = trimmedProvidedManifest.WriteToIni();
-        IniData iniProvActual = actualProvidedMani.WriteToIni();
-        if (updateType == UpdateType::SameContents) {
-            ClearCompressedHash(iniProvComputed);
-            ClearCompressedHash(iniProvActual);
-        }
-        if (iniProvComputed != iniProvActual) {
-            WriteIniFile((basePath + "/provided_computed.ini").c_str(), iniProvComputed);
-            WriteIniFile((basePath + "/provided_actual.ini").c_str(), iniProvActual);
-        }
-        TdmSyncAssert(iniProvComputed == iniProvActual);
+        _numCasesValidated++;
+        return true;
+    }
 
+    void WriteInput() {
+        _initialTargetMani.Clear();
+        _initialProvidedMani.Clear();
+        WriteState(_rootTargetDir, _initialTargetState, &_initialTargetMani, nullptr);
+        WriteState(_rootInplaceDir, _initialInplaceState, nullptr, &_initialProvidedMani);
+        WriteState(_rootLocalDir, _initialLocalState, nullptr, &_initialProvidedMani);
+    }
+
+    bool DoUpdate() {
+        _updater.reset(new UpdateProcess());
+
+        _updater->Init(TargetManifest(_initialTargetMani), ProvidedManifest(_initialProvidedMani), _rootInplaceDir);
+        for (const auto &zipPair : _initialInplaceState)
+            _updater->AddManagedZip(_rootInplaceDir + "/" + zipPair.first);
+
+        bool success = _updater->DevelopPlan(_updateType);
+        _numCasesShouldSucceed += _shouldUpdateSucceed;
+        _numCasesActualSucceed += success;
+
+        if (!success) {
+            TdmSyncAssert(!_shouldUpdateSucceed);
+            return false;
+        }
+        //sometimes same file with different compression level is packed into same compressed data
+        //hence our "should succeed" detection is not perfect, so we allow a bit of errors of one type
+        double moreSuccessRatio = double(_numCasesActualSucceed - _numCasesShouldSucceed) / std::max(_numCasesValidated, 200);
+        TdmSyncAssert(moreSuccessRatio <= 0.05);    //actually, this ratio is smaller than 1%
+        
+        _updater->RepackZips();
+        return true;
+    }
+
+    void CheckOutput() {
+        _finalComputedProvidedMani = _updater->GetProvidedManifest();
+
+        //analyze the actual state of inplace/update directory
+        auto resultPaths = stdext::recursive_directory_enumerate(_rootInplaceDir);
+        _finalActualTargetMani.Clear();
+        _finalActualProvidedMani.Clear();
+        ProvidedManifest actualProvidedMani;
+        for (stdext::path filePath : resultPaths) {
+            if (!stdext::is_regular_file(filePath))
+                continue;
+            if (!stdext::starts_with(filePath.filename().string(), "__reduced__")) {
+                _finalActualTargetMani.AppendLocalZip(filePath.string(), _rootInplaceDir, "default");
+            }
+            _finalActualProvidedMani.AppendLocalZip(filePath.string(), _rootInplaceDir);
+        }
+
+        //check: the actual state exactly matches what we wanted to obtain
+        AssertManifestsSame(
+            _initialTargetMani.WriteToIni(), "target_expected.ini",
+            _finalActualTargetMani.WriteToIni(), "target_obtained.ini"
+        );
+
+        //check: the provided manifest computed by updater exactly represents the current state
+        ProvidedManifest inplaceComputedProvidedMani = FilterManifest(_finalComputedProvidedMani, [&](const ProvidedFile &f) {
+            return f.zipPath.GetRootDir() == _rootInplaceDir;
+        });
+        AssertManifestsSame(
+            inplaceComputedProvidedMani.WriteToIni(), "provided_computed.ini",
+            _finalActualProvidedMani.WriteToIni(), "provided_actual.ini"
+        );
+
+        //check: all files previously available are still available, if we take reduced zips into account
+        //TODO
+    }
+};
+
+//==========================================================================================
+
+void Fuzz(std::string where) {
+    Fuzzer fuzz;
+    for (int attempt = 0; attempt < 1000000000; attempt++) {
+        fuzz.GenerateInput(where + "/" + std::to_string(attempt), attempt);
+        if (!fuzz.ValidateInput())
+            continue;
+        fuzz.WriteInput();
+        if (fuzz.DoUpdate())
+            fuzz.CheckOutput();
     }
 }
 
