@@ -577,7 +577,16 @@ public:
         );
 
         //check: all files previously available are still available, if we take reduced zips into account
-        //TODO
+        for (int i = 0; i < _initialProvidedMani.size(); i++) {
+            const ProvidedFile &oldFile = _initialProvidedMani[i];
+            bool available = false;
+            for (int j = 0; j < _finalComputedProvidedMani.size() && !available; j++) {
+                const ProvidedFile &newFile = _finalComputedProvidedMani[j];
+                if (oldFile.compressedHash == newFile.compressedHash)
+                    available = true;
+            }
+            TdmSyncAssertF(available, "File %s with hash %s is no longer available", GetFullPath(oldFile.zipPath.abs, oldFile.filename).c_str(), oldFile.compressedHash.Hex().c_str());
+        }
     }
 };
 
