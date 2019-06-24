@@ -55,7 +55,7 @@ void AnalyzeCurrentFile(unzFile zf, ProvidedFile &provided, TargetFile &target, 
     unzGetCurrentFilePosition(zf, &provided.byterange[0], NULL, &provided.byterange[1]);
 
     for (int mode = 0; mode < 2; mode++) {
-        if (!(mode == 0 ? hashContents : hashCompressed))
+        if (!(mode == 0 ? hashCompressed : hashContents))
             continue;
         SAFE_CALL(unzOpenCurrentFile2(zf, NULL, NULL, !mode));
 

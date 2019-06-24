@@ -304,8 +304,8 @@ public:
             providedNew.zipPath = targetNew.zipPath = PathAR::FromAbs(zip._zipPathRepacked, _owner._rootDir);
             providedNew.location = ProvidedLocation::Repacked;
             targetNew.package = "[repacked]";
-            providedNew.contentsHash = targetNew.contentsHash = m.target->contentsHash;
-            providedNew.compressedHash = targetNew.compressedHash = m.target->compressedHash;   //will be recomputed if needsRehashCompressed
+            providedNew.contentsHash = targetNew.contentsHash = m.provided->contentsHash;
+            providedNew.compressedHash = targetNew.compressedHash = m.provided->compressedHash;   //will be recomputed if needsRehashCompressed
             AnalyzeCurrentFile(zf, providedNew, targetNew, false, needsRehashCompressed);
             //check that it indeed matches the target
             ValidateFile(*m.target, targetNew);
