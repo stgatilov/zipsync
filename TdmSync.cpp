@@ -190,38 +190,63 @@ public:
         }
     }
 
-#if 0
     void ProcessZipsWithoutRepacking() {
-        //check which target zips need no change at all
-        std::map<std::string, std::vector<ProvidedIter>> zipToProvided;
-        for (int i = 0; i < _owner._providedMani.size(); i++) {
-            const ProvidedFile &pf = _owner._providedMani[i];
-            zipToProvided[pf.zipPath.abs].push_back(ProvidedIter(_owner._providedMani, i));
-        }
-        std::vector<std::string> zipsDontChange;
-        for (const auto &pZV : _zipToMatchIds) {
-            const std::string &zipPath = pZV.first;
-            const std::vector<int> &matchIds = pZV.second;
-            int cntInplace = matchIds.size();
-            for (int midx : matchIds) {
+        //two important use-cases when no repacking should be done:
+        //  1. existing zip did not change and should not be updated
+        //  2. clean install: downloaded zip should be renamed without repacking
+        for (ZipInfo &dstZip : _zips) {
+            if (dstZip._matchIds.empty())
+                continue;       //nothing to put into this zip
+            int k = dstZip._matchIds.size();
+
+            //find source zip candidate
+            const PathAR &srcZipPath = _owner._matches[dstZip._matchIds[0]].provided->zipPath;
+            ZipInfo &srcZip = FindZip(srcZipPath.abs);
+            if (srcZip._provided.size() != k)
+                continue;       //number of files is different
+
+            //check that "match" mapping maps into source zip and is surjective
+            std::set<const ProvidedFile *> providedSet;
+            for (int midx : dstZip._matchIds) {
                 Match m = _owner._matches[midx];
-                if (m.provided->location != ProvidedLocation::Inplace)
-                    cntInplace--;
+                if (m.provided->zipPath.abs != srcZip._zipPath)
+                    break;
+                providedSet.insert(m.provided.get());
             }
-            int cntProvided = 0;
-            auto iter = zipToProvided.find(zipPath);
-            if (iter != zipToProvided.end())
-                cntProvided = iter->second.size();
-            if (cntInplace == matchIds.size() && cntInplace == cntProvided)
-                zipsDontChange.push_back(zipPath);
+            if (providedSet.size() != k)
+                continue;       //some matches map outside (or not surjective)
+
+            if (!srcZip._managed)
+                continue;       //non-managed zip: cannot rename
+            if (srcZip._usedCnt != k)
+                continue;       //every file inside zip must be used exactly once
+
+            //note: we can rename source zip into target zip directly
+            //this would substitute both repacking and reducing
+
+            //do the physical action
+            CreateDirectoriesForFile(dstZip._zipPath, _owner._rootDir);
+            RenameFile(srcZip._zipPath, dstZip._zipPath);
+
+            //update all the data structures
+            dstZip._repacked = true;
+            srcZip._usedCnt = 0;
+            srcZip._reduced = true;
+            std::map<uint32_t, ProvidedIter> filesMap;
+            for (ProvidedIter pf : srcZip._provided) {
+                _repackedMani.AppendFile(*pf);
+                filesMap[pf->byterange[0]] = ProvidedIter(_repackedMani, _repackedMani.size() - 1);
+            }
+            for (int midx : dstZip._matchIds) {
+                _recompressed.resize(midx + 1, false);
+                _recompressed[midx] = false;
+                ProvidedIter &pf = _owner._matches[midx].provided;
+                ProvidedIter newIter = filesMap.at(pf->byterange[0]);
+                pf->Nullify();
+                pf = newIter;
+            }
         }
-        //remove such zips from our todo list
-        for (const std::string zipfn : zipsDontChange)
-            _zipToMatchIds.erase(zipfn);
-    
-        //TODO: handle case when downloaded zip fits target zip perfectly
     }
-#endif
 
     void RepackZip(ZipInfo &zip) {
         //ensure all directories are created if missing
