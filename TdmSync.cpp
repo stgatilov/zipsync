@@ -415,10 +415,7 @@ public:
                 RemoveFile(zip._zipPath);
                 //nullify all provided files from the removed zip
                 for (ProvidedIter pf : zip._provided) {
-                    pf->compressedHash.Clear();
-                    pf->contentsHash.Clear();
-                    pf->byterange[0] = pf->byterange[1] = 0;
-                    pf->location = ProvidedLocation::Nowhere;
+                    pf->Nullify();
                 }
             }
 

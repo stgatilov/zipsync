@@ -47,6 +47,7 @@ struct ProvidedFile {
     HashDigest compressedHash;
 
     static bool IsLess_ByZip(const ProvidedFile &a, const ProvidedFile &b);
+    void Nullify();
 };
 
 /**
@@ -195,6 +196,7 @@ template<class File, class Manifest> struct IndexIterator {
     File& operator*() const { return (*_manifest)[_index]; }
     File* operator->() const { return &(*_manifest)[_index]; }
     explicit operator bool() const { return _manifest != nullptr; }
+    File *get () const { return &(*_manifest)[_index]; }
 };
 typedef IndexIterator<TargetFile, TargetManifest> TargetIter;
 typedef IndexIterator<ProvidedFile, ProvidedManifest> ProvidedIter;

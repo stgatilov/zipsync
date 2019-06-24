@@ -19,6 +19,13 @@ bool TargetFile::IsLess_ByZip(const TargetFile &a, const TargetFile &b) {
     return std::tie(a.zipPath.rel, a.package, a.filename, a.contentsHash) < std::tie(b.zipPath.rel, b.package, b.filename, b.contentsHash);
 }
 
+void ProvidedFile::Nullify() {
+    compressedHash.Clear();
+    contentsHash.Clear();
+    byterange[0] = byterange[1] = 0;
+    location = ProvidedLocation::Nowhere;
+}
+
 
 void AnalyzeCurrentFile(unzFile zf, ProvidedFile &provided, TargetFile &target, bool hashContents, bool hashCompressed) {
     char filename[SIZE_PATH];
