@@ -155,12 +155,6 @@ public:
     }
 
     void ClassifyMatchesByTargetZip() {
-        //sort matches: all matches with target in one zip are consecutive
-        //I'm not sure whether it is required by the algorithm, but it is more convenient
-        std::sort(_owner._matches.begin(), _owner._matches.end(), [](const Match &a, const Match &b) {
-            return TargetFile::IsLess_ByZip(*a.target, *b.target);
-        });
-
         //create ZipInfo structure for every zip involved
         std::set<std::string> zipPaths = _owner._managedZips;
         for (int i = 0; i < _owner._providedMani.size(); i++) {
