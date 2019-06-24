@@ -209,7 +209,7 @@ rank 	  lemma / word 	PoS 	freq 	dispersion
     };
     InZipParams GenInZipParams() {
         InZipParams res;
-        res.method = (IntD(0, 1)(_rnd) ? 8 : 0);
+        res.method = (IntD(0, 2)(_rnd) > 0 ? 8 : 0);
         res.level = res.method ? IntD(Z_BEST_SPEED, Z_BEST_COMPRESSION)(_rnd) : 0;
         res.dosDate = IntD(INT_MIN, INT_MAX)(_rnd);
         res.internalAttribs = IntD(INT_MIN, INT_MAX)(_rnd);
@@ -456,14 +456,14 @@ class Fuzzer : private FuzzerGenerator {
     TargetManifest _finalActualTargetMani;          //real contents of "inplace" dir (without "reduced" zips)
     ProvidedManifest _finalActualProvidedMani;      //real contents of "inplace" dir (includes "reduced" zips)
 
-    void AssertManifestsSame(IniData &&iniDataA, std::string dumpFnA, IniData &&iniDataB, std::string dumpFnB) const {
+    void AssertManifestsSame(IniData &&iniDataA, std::string dumpFnA, IniData &&iniDataB, std::string dumpFnB, bool ignoreCompressedHash = false) const {
         auto ClearCompressedHash = [](IniData &ini) {
             for (auto& pSect : ini)
                 for (auto &pProp : pSect.second)
                     if (pProp.first == "compressedHash" || pProp.first == "compressedSize")
                         pProp.second = "(removed)";
         };
-        if (_updateType == UpdateType::SameContents) {
+        if (ignoreCompressedHash) {
             ClearCompressedHash(iniDataA);
             ClearCompressedHash(iniDataB);
         }
@@ -561,10 +561,11 @@ public:
             _finalActualProvidedMani.AppendLocalZip(filePath.string(), _rootInplaceDir);
         }
 
-        //check: the actual state exactly matches what we wanted to obtain
+        //check: the actual state exactly matches what we wanted to obtain (compressed hash may differ depending on options)
         AssertManifestsSame(
             _initialTargetMani.WriteToIni(), "target_expected.ini",
-            _finalActualTargetMani.WriteToIni(), "target_obtained.ini"
+            _finalActualTargetMani.WriteToIni(), "target_obtained.ini",
+            _updateType == UpdateType::SameContents
         );
 
         //check: the provided manifest computed by updater exactly represents the current state
