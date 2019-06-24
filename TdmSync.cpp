@@ -103,9 +103,7 @@ public:
 
     struct ZipInfo {
         std::string _zipPath;
-
         bool _managed = false;
-        //bool _exists;?
 
         std::vector<TargetIter> _target;
         std::vector<ProvidedIter> _provided;
@@ -131,13 +129,8 @@ public:
         TdmSyncAssert(false);
     }
 
-    /*//for every target zip to be repacked: indices of all matches with target file in it
-    std::map<std::string, std::vector<int>> _zipToMatchIds;
-    //for every provided zip used in repacking: how many of its files are still needed
-    //???
-    std::map<std::string, int> _zipToUsedCnt;*/
-    //indexed as matches: true if provided file was copied in "raw" mode, false if in recompressing mode
-    std::vector<bool> _copiedRaw;
+    //indexed as matches: false if provided file was copied in "raw" mode, true if in recompressing mode
+    std::vector<bool> _recompressed;
     //how many (local) provided files have specified compressed hash
     //note: includes files from repacked and reduced zips
     std::map<HashDigest, int> _hashProvidedCnt;
@@ -267,8 +260,8 @@ public:
                 copyRaw, m.target->fhCrc32, m.target->fhContentsSize
             );
             //remember whether we repacked or not --- to be used in AnalyzeRepackedZip
-            _copiedRaw.resize(midx+1, false);
-            _copiedRaw[midx] = true;
+            _recompressed.resize(midx+1, false);
+            _recompressed[midx] = !copyRaw;
         }
 
         //flush and close new zip
@@ -305,7 +298,7 @@ public:
             if (i > 0) SAFE_CALL(unzGoToNextFile(zf));
 
             //analyze current file
-            bool needsRehashCompressed = !_copiedRaw[midx];
+            bool needsRehashCompressed = _recompressed[midx];
             TargetFile targetNew;
             ProvidedFile providedNew;
             providedNew.zipPath = targetNew.zipPath = PathAR::FromAbs(zip._zipPathRepacked, _owner._rootDir);
