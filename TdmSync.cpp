@@ -226,7 +226,7 @@ public:
 
             //do the physical action
             CreateDirectoriesForFile(dstZip._zipPath, _owner._rootDir);
-            RenameFile(srcZip._zipPath, dstZip._zipPath);
+            RenameFile(srcZip._zipPath, dstZip._zipPathRepacked);
 
             //update all the data structures
             dstZip._repacked = true;
@@ -234,6 +234,7 @@ public:
             srcZip._reduced = true;
             std::map<uint32_t, ProvidedIter> filesMap;
             for (ProvidedIter pf : srcZip._provided) {
+                pf->location = ProvidedLocation::Repacked;
                 _repackedMani.AppendFile(*pf);
                 filesMap[pf->byterange[0]] = ProvidedIter(_repackedMani, _repackedMani.size() - 1);
             }
@@ -485,11 +486,12 @@ public:
     void DoAll() {
         CheckPreconditions();
         ClassifyMatchesByTargetZip();
-        //ProcessZipsWithoutRepacking();    //TODO
 
         //prepare manifest for repacked files
         _repackedMani.Clear();
         _reducedMani.Clear();
+
+        ProcessZipsWithoutRepacking();
 
         //iterate over all zips and repack them
         ReduceOldZips();
@@ -498,6 +500,8 @@ public:
                 continue;   //no targets, no need to remove
             if (zip._matchIds.empty())
                 continue;   //minizip doesn't support empty zip
+            if (zip._repacked && zip._reduced)
+                continue;   //renamed in ProcessZipsWithoutRepacking
             RepackZip(zip);
             AnalyzeRepackedZip(zip);
             ReduceOldZips();
