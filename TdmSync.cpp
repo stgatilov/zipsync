@@ -221,6 +221,43 @@ public:
             if (srcZip._usedCnt != k)
                 continue;       //every file inside zip must be used exactly once
 
+            { //check that filenames and header data are same (we cannot detect it by provided manifest, unfortunately)
+                std::map<uint32_t, TargetIter> bytestartToTarget;
+                for (int midx : dstZip._matchIds) {
+                    Match m = _owner._matches[midx];
+                    bytestartToTarget[m.provided->byterange[0]] = m.target;
+                }
+                UnzFileHolder zf(srcZip._zipPath.c_str());
+                bool allSame = true;
+                for (int i = 0; i < k; i++) {
+                    SAFE_CALL(i == 0 ? unzGoToFirstFile(zf) : unzGoToNextFile(zf));
+                    ProvidedFile pf;
+                    TargetFile tf;
+                    AnalyzeCurrentFile(zf, pf, tf, false, false);
+                    auto iter = bytestartToTarget.find(pf.byterange[0]);
+                    if (iter == bytestartToTarget.end()) {
+                        allSame = false;
+                        break;
+                    }
+                    const TargetFile &want = *iter->second;
+                    if (want.filename != tf.filename ||
+                        want.fhLastModTime != tf.fhLastModTime ||
+                        want.fhCompressionMethod != tf.fhCompressionMethod ||
+                        want.fhGeneralPurposeBitFlag != tf.fhGeneralPurposeBitFlag ||
+                        want.fhInternalAttribs != tf.fhInternalAttribs ||
+                        want.fhExternalAttribs != tf.fhExternalAttribs ||
+                        want.fhCompressedSize != tf.fhCompressedSize ||
+                        want.fhContentsSize != tf.fhContentsSize ||
+                        want.fhCrc32 != tf.fhCrc32
+                    ) {
+                        allSame = false;
+                        break;
+                    }
+                }
+                if (!allSame)
+                    continue;   //filenames of metadata differ
+            }
+
             //note: we can rename source zip into target zip directly
             //this would substitute both repacking and reducing
 
