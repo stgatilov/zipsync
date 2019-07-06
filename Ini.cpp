@@ -4,7 +4,7 @@
 #include "tsassert.h"
 
 
-namespace TdmSync {
+namespace ZipSync {
 
 void WriteIniFile(const char *path, const IniData &data) {
     StdioFileHolder f(path, "wb");
@@ -38,7 +38,7 @@ IniData ReadIniFile(const char *path) {
         }
         else {
             size_t pos = line.find('=');
-            TdmSyncAssertF(pos != std::string::npos, "Cannot parse ini line: %s", line.c_str());
+            ZipSyncAssertF(pos != std::string::npos, "Cannot parse ini line: %s", line.c_str());
             std::string key = line.substr(0, pos);
             std::string value = line.substr(pos+1);
             sec.push_back(std::make_pair(std::move(key), std::move(value)));

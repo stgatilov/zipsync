@@ -2,7 +2,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 
-namespace TdmSync {
+namespace ZipSync {
 
 std::string assertFailedMessage(const char *code, const char *file, int line) {
     char buff[256];

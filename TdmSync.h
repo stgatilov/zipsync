@@ -4,7 +4,7 @@
 #include <set>
 
 
-namespace TdmSync {
+namespace ZipSync {
 
 class LocalCache;
 

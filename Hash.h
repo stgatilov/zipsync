@@ -9,7 +9,7 @@
 #pragma warning(pop)
 
 
-namespace TdmSync {
+namespace ZipSync {
 
 /**
  * The hash digest used for all files.

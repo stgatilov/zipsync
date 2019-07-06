@@ -4,7 +4,7 @@
 #include "tsassert.h"
 
 
-namespace TdmSync {
+namespace ZipSync {
 
 bool HashDigest::operator< (const HashDigest &other) const {
     return memcmp(_data, other._data, sizeof(_data)) < 0;
@@ -19,13 +19,13 @@ std::string HashDigest::Hex() const {
     return text;
 }
 void HashDigest::Parse(const char *hex) {
-    TdmSyncAssertF(strlen(hex) == 2 * sizeof(_data), "Hex digest has wrong length %d", strlen(hex));
+    ZipSyncAssertF(strlen(hex) == 2 * sizeof(_data), "Hex digest has wrong length %d", strlen(hex));
     for (int i = 0; i < sizeof(_data); i++) {
         char octet[4] = {0};
         memcpy(octet, hex + 2*i, 2);
         uint32_t value;
         int k = sscanf(octet, "%02x", &value);
-        TdmSyncAssertF(k == 1, "Cannot parse hex digest byte %s", octet);
+        ZipSyncAssertF(k == 1, "Cannot parse hex digest byte %s", octet);
         _data[i] = value;
     }
 }

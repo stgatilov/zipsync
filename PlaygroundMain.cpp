@@ -3,7 +3,7 @@
 #include <assert.h>
 #include "StdFilesystem.h"
 
-using namespace TdmSync;
+using namespace ZipSync;
 
 void CreateManifests() {
     static const char *ZIP = R"(C:/TheDarkMod/darkmod_207/tdm_textures_stone_brick01.pk4)";

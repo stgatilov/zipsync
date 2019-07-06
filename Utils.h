@@ -4,7 +4,7 @@
 #include <vector>
 
 
-namespace TdmSync {
+namespace ZipSync {
 
 static const int SIZE_PATH = 4<<10;
 static const int SIZE_FILEBUFFER = 64<<10;

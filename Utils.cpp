@@ -2,7 +2,7 @@
 #include "tsassert.h"
 
 
-namespace TdmSync {
+namespace ZipSync {
 
 StdioFileHolder::~StdioFileHolder()
 {}
@@ -12,7 +12,7 @@ StdioFileHolder::StdioFileHolder(FILE *f)
 StdioFileHolder::StdioFileHolder(const char *path, const char *mode)
     : StdioFileUniquePtr(fopen(path, mode), fclose)
 {
-    TdmSyncAssertF(get(), "Failed to open file \"%s\"", path);
+    ZipSyncAssertF(get(), "Failed to open file \"%s\"", path);
 }
 
 }

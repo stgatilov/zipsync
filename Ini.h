@@ -4,7 +4,7 @@
 #include <string>
 #include <algorithm>
 
-namespace TdmSync {
+namespace ZipSync {
 
 /// Contents of one section of ini file (note: ordered).
 typedef std::vector<std::pair<std::string, std::string>> IniSect;

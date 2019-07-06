@@ -2,7 +2,7 @@
 #include "Utils.h"
 
 
-namespace TdmSync {
+namespace ZipSync {
 
 int zipCloseNoComment(zipFile zf) {
     return zipClose(zf, NULL);
@@ -16,7 +16,7 @@ UnzFileHolder::UnzFileHolder(unzFile zf)
 UnzFileHolder::UnzFileHolder(const char *path)
     : UnzFileUniquePtr(unzOpen(path), unzClose)
 {
-    TdmSyncAssertF(get(), "Failed to open zip file \"%s\"", path);
+    ZipSyncAssertF(get(), "Failed to open zip file \"%s\"", path);
 }
 
 ZipFileHolder::~ZipFileHolder()
@@ -27,7 +27,7 @@ ZipFileHolder::ZipFileHolder(zipFile zf)
 ZipFileHolder::ZipFileHolder(const char *path)
     : ZipFileUniquePtr(zipOpen(path, 0), zipCloseNoComment)
 {
-    TdmSyncAssertF(get(), "Failed to open zip file \"%s\"", path);
+    ZipSyncAssertF(get(), "Failed to open zip file \"%s\"", path);
 }
 
 MinizipError::MinizipError(int errcode)

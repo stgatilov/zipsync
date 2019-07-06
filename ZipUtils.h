@@ -7,7 +7,7 @@
 #include "zip.h"
 
 
-namespace TdmSync {
+namespace ZipSync {
 
 typedef std::unique_ptr<std::remove_pointer<unzFile>::type, int (*)(unzFile)> UnzFileUniquePtr;
 /**
@@ -37,7 +37,7 @@ public:
 
 
 /**
- * TdmSync exception thrown when minizip function reports error.
+ * ZipSync exception thrown when minizip function reports error.
  * Automatically throw by SAFE_CALL macro.
  */
 class MinizipError : public BaseError {

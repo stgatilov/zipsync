@@ -1,7 +1,7 @@
 #pragma once
 
 
-namespace TdmSync {
+namespace ZipSync {
 
 /**
  * Represents the local updater cache (physically present near installation).

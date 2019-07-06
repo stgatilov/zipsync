@@ -1,7 +1,7 @@
 #include "LocalCache.h"
 
 
-namespace TdmSync {
+namespace ZipSync {
 
 
 }

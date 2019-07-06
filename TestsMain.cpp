@@ -7,7 +7,7 @@
 #include "StdFilesystem.h"
 #include "TdmSync.h"
 #include "Fuzzer.h"
-using namespace TdmSync;
+using namespace ZipSync;
 
 #include "zip.h"
 #include "blake2.h"

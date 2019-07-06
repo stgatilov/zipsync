@@ -10,7 +10,7 @@
 #include "minizip_extra.h"
 
 
-namespace TdmSync {
+namespace ZipSync {
 
 bool ProvidedFile::IsLess_ByZip(const ProvidedFile &a, const ProvidedFile &b) {
     return std::tie(a.zipPath.rel, a.filename, a.contentsHash) < std::tie(b.zipPath.rel, b.filename, b.contentsHash);
@@ -32,15 +32,15 @@ void AnalyzeCurrentFile(unzFile zf, ProvidedFile &provided, TargetFile &target, 
     unz_file_info info;
     SAFE_CALL(unzGetCurrentFileInfo(zf, &info, filename, sizeof(filename), NULL, 0, NULL, 0));
 
-    TdmSyncAssertF(info.version == 0, "File %s has made-by version %d (not supported)", filename, info.version);
-    TdmSyncAssertF(info.version_needed == 20, "File %s needs zip version %d (not supported)", filename, info.version_needed);
-    TdmSyncAssertF((info.flag & 0x08) == 0, "File %s has data descriptor (not supported)", filename);
-    TdmSyncAssertF((info.flag & 0x01) == 0, "File %s is encrypted (not supported)", filename);
-    TdmSyncAssertF((info.flag & (~0x06)) == 0, "File %s has flags %d (not supported)", filename, info.flag);
-    TdmSyncAssertF(info.compression_method == 0 || info.compression_method == 8, "File %s has compression %d (not supported)", filename, info.compression_method);
-    TdmSyncAssertF(info.size_file_extra == 0, "File %s has extra field in header (not supported)", filename);
-    TdmSyncAssertF(info.size_file_comment == 0, "File %s has comment in header (not supported)", filename);
-    TdmSyncAssertF(info.disk_num_start == 0, "File %s has disk nonzero number (not supported)", filename);
+    ZipSyncAssertF(info.version == 0, "File %s has made-by version %d (not supported)", filename, info.version);
+    ZipSyncAssertF(info.version_needed == 20, "File %s needs zip version %d (not supported)", filename, info.version_needed);
+    ZipSyncAssertF((info.flag & 0x08) == 0, "File %s has data descriptor (not supported)", filename);
+    ZipSyncAssertF((info.flag & 0x01) == 0, "File %s is encrypted (not supported)", filename);
+    ZipSyncAssertF((info.flag & (~0x06)) == 0, "File %s has flags %d (not supported)", filename, info.flag);
+    ZipSyncAssertF(info.compression_method == 0 || info.compression_method == 8, "File %s has compression %d (not supported)", filename, info.compression_method);
+    ZipSyncAssertF(info.size_file_extra == 0, "File %s has extra field in header (not supported)", filename);
+    ZipSyncAssertF(info.size_file_comment == 0, "File %s has comment in header (not supported)", filename);
+    ZipSyncAssertF(info.disk_num_start == 0, "File %s has disk nonzero number (not supported)", filename);
     //TODO: check that extra field is empty in local file header?...
 
     target.filename = provided.filename = filename;
@@ -76,11 +76,11 @@ void AnalyzeCurrentFile(unzFile zf, ProvidedFile &provided, TargetFile &target, 
         SAFE_CALL(unzCloseCurrentFile(zf));
 
         if (mode == 0) {
-            TdmSyncAssertF(processedBytes == target.fhCompressedSize, "File %s has wrong compressed size: %d instead of %d", filename, target.fhCompressedSize, processedBytes);
+            ZipSyncAssertF(processedBytes == target.fhCompressedSize, "File %s has wrong compressed size: %d instead of %d", filename, target.fhCompressedSize, processedBytes);
             target.compressedHash = provided.compressedHash = cmpHash;
         }
         else {
-            TdmSyncAssertF(processedBytes == target.fhContentsSize, "File %s has wrong uncompressed size: %d instead of %d", filename, target.fhContentsSize, processedBytes);
+            ZipSyncAssertF(processedBytes == target.fhContentsSize, "File %s has wrong uncompressed size: %d instead of %d", filename, target.fhContentsSize, processedBytes);
             target.contentsHash = provided.contentsHash = cmpHash;
         }
     }
@@ -95,7 +95,7 @@ void AppendManifestsFromLocalZip(
     PathAR zipPath = PathAR::FromAbs(zipPathAbs, rootDir);
 
     UnzFileHolder zf(zipPath.abs.c_str());
-    TdmSyncAssertF(!unzIsZip64(zf), "Zip64 is not supported!");
+    ZipSyncAssertF(!unzIsZip64(zf), "Zip64 is not supported!");
     SAFE_CALL(unzGoToFirstFile(zf));
     while (1) {
         ProvidedFile pf;
@@ -176,10 +176,10 @@ void ProvidedManifest::ReadFromIni(const IniData &data, const std::string &rootD
 
         std::string byterange = dict.at("byterange");
         size_t pos = byterange.find('-');
-        TdmSyncAssertF(pos != std::string::npos, "Byterange %s has no hyphen", byterange.c_str());
+        ZipSyncAssertF(pos != std::string::npos, "Byterange %s has no hyphen", byterange.c_str());
         pf.byterange[0] = std::stoul(byterange.substr(0, pos));
         pf.byterange[1] = std::stoul(byterange.substr(pos+1));
-        TdmSyncAssert(pf.byterange[0] < pf.byterange[1]);
+        ZipSyncAssert(pf.byterange[0] < pf.byterange[1]);
 
         AppendFile(pf);
     }

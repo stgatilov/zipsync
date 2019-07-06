@@ -11,7 +11,7 @@
 #include "zip.h"
 
 
-namespace TdmSync {
+namespace ZipSync {
 
 typedef std::uniform_int_distribution<int> IntD;
 typedef std::uniform_real_distribution<double> DblD;
@@ -51,7 +51,7 @@ public:
 
     std::vector<int> GenPartition(int sum, int cnt, int minV = 0) {
         sum -= cnt * minV;
-        TdmSyncAssert(sum >= 0);
+        ZipSyncAssert(sum >= 0);
         std::vector<int> res;
         for (int i = 0; i < cnt; i++) {
             double avg = double(sum) / (cnt - i);
@@ -471,7 +471,7 @@ class Fuzzer : private FuzzerGenerator {
             WriteIniFile((_baseDir + "/" + dumpFnA).c_str(), iniDataA);
             WriteIniFile((_baseDir + "/" + dumpFnB).c_str(), iniDataB);
         }
-        TdmSyncAssert(iniDataA == iniDataB);
+        ZipSyncAssert(iniDataA == iniDataB);
     }
 
 public:
@@ -532,13 +532,13 @@ public:
         _numCasesActualSucceed += success;
 
         if (!success) {
-            TdmSyncAssert(!_shouldUpdateSucceed);
+            ZipSyncAssert(!_shouldUpdateSucceed);
             return false;
         }
         //sometimes same file with different compression level is packed into same compressed data
         //hence our "should succeed" detection is not perfect, so we allow a bit of errors of one type
         double moreSuccessRatio = double(_numCasesActualSucceed - _numCasesShouldSucceed) / std::max(_numCasesValidated, 200);
-        TdmSyncAssert(moreSuccessRatio <= 0.05);    //actually, this ratio is smaller than 1%
+        ZipSyncAssert(moreSuccessRatio <= 0.05);    //actually, this ratio is smaller than 1%
         
         _updater->RepackZips();
         return true;
@@ -586,7 +586,7 @@ public:
                 if (oldFile.compressedHash == newFile.compressedHash)
                     available = true;
             }
-            TdmSyncAssertF(available, "File %s with hash %s is no longer available", GetFullPath(oldFile.zipPath.abs, oldFile.filename).c_str(), oldFile.compressedHash.Hex().c_str());
+            ZipSyncAssertF(available, "File %s with hash %s is no longer available", GetFullPath(oldFile.zipPath.abs, oldFile.filename).c_str(), oldFile.compressedHash.Hex().c_str());
         }
     }
 };

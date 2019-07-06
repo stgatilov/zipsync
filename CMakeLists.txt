@@ -1,5 +1,5 @@
 cmake_minimum_required (VERSION 3.9.6)
-project(tdmsync2 CXX C)
+project(zipsync CXX C)
 
 include(conanbuildinfo.cmake)
 conan_basic_setup()
@@ -58,10 +58,10 @@ else()
 endif()
 
 
-add_library(libtdmsync ${sources})
+add_library(libzipsync ${sources})
 
 add_executable(tests ${tests_sources})
-target_link_libraries(tests libtdmsync ${CONAN_LIBS})
+target_link_libraries(tests libzipsync ${CONAN_LIBS})
 
 add_executable(playground ${playground_sources})
-target_link_libraries(playground libtdmsync ${CONAN_LIBS})
+target_link_libraries(playground libzipsync ${CONAN_LIBS})

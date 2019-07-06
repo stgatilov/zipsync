@@ -9,7 +9,7 @@
 #endif
 
 
-namespace TdmSync {
+namespace ZipSync {
 
 bool PathAR::IsHttp(const std::string &path) {
     return stdext::starts_with(path, "http://");
@@ -17,13 +17,13 @@ bool PathAR::IsHttp(const std::string &path) {
 
 static void CheckPath(const std::string &path, bool relative) {
     for (int i = 0; i < path.size(); i++)
-        TdmSyncAssertF(uint8_t(path[i]) >= 32, "Non-printable character %d in path", int(path[i]));
-    TdmSyncAssertF(!path.empty() && path != "/", "Empty path [%s]", path.c_str());
-    TdmSyncAssertF(path.find_first_of("\\|[]=?&") == std::string::npos, "Forbidden symbol in path %s", path.c_str());
-    TdmSyncAssertF(path[0] != '.', "Path must not start with dot: %s", path.c_str());
+        ZipSyncAssertF(uint8_t(path[i]) >= 32, "Non-printable character %d in path", int(path[i]));
+    ZipSyncAssertF(!path.empty() && path != "/", "Empty path [%s]", path.c_str());
+    ZipSyncAssertF(path.find_first_of("\\|[]=?&") == std::string::npos, "Forbidden symbol in path %s", path.c_str());
+    ZipSyncAssertF(path[0] != '.', "Path must not start with dot: %s", path.c_str());
     if (relative) {
-        TdmSyncAssertF(path.find_first_of(":") == std::string::npos, "Colon in relative path %s", path.c_str());
-        TdmSyncAssertF(path[0] != '/', "Relative path starts with slash: %s", path.c_str())
+        ZipSyncAssertF(path.find_first_of(":") == std::string::npos, "Colon in relative path %s", path.c_str());
+        ZipSyncAssertF(path[0] != '/', "Relative path starts with slash: %s", path.c_str())
     }
 }
 
@@ -32,8 +32,8 @@ PathAR PathAR::FromAbs(std::string absPath, std::string rootDir) {
     CheckPath(absPath, false);
     bool lastSlash = (rootDir.back() == '/');
     int len = rootDir.size() - (lastSlash ? 1 : 0);
-    TdmSyncAssertF(strncmp(absPath.c_str(), rootDir.c_str(), len) == 0, "Abs path %s is not within root dir %s", absPath.c_str(), rootDir.c_str());
-    TdmSyncAssertF(absPath.size() > len && absPath[len] == '/', "Abs path %s is not within root dir %s", absPath.c_str(), rootDir.c_str());
+    ZipSyncAssertF(strncmp(absPath.c_str(), rootDir.c_str(), len) == 0, "Abs path %s is not within root dir %s", absPath.c_str(), rootDir.c_str());
+    ZipSyncAssertF(absPath.size() > len && absPath[len] == '/', "Abs path %s is not within root dir %s", absPath.c_str(), rootDir.c_str());
     PathAR res;
     res.abs = absPath;
     res.rel = absPath.substr(len+1);
@@ -50,7 +50,7 @@ PathAR PathAR::FromRel(std::string relPath, std::string rootDir) {
 }
 
 std::string PathAR::GetRootDir() const {
-    TdmSyncAssertF(abs.size() > rel.size() && rel == abs.substr(abs.size() - rel.size()), "Absolute path %s doesn't have relative path %s as prefix", abs.c_str(), rel.c_str());
+    ZipSyncAssertF(abs.size() > rel.size() && rel == abs.substr(abs.size() - rel.size()), "Absolute path %s doesn't have relative path %s as prefix", abs.c_str(), rel.c_str());
     return abs.substr(0, abs.size() - rel.size() - 1);
 }
 
@@ -69,7 +69,7 @@ std::string GetFullPath(const std::string &zipPath, const std::string &filename)
 }
 void ParseFullPath(const std::string &fullPath, std::string &zipPath, std::string &filename) {
     size_t pos = fullPath.find("||");
-    TdmSyncAssertF(pos != std::string::npos, "Cannot split fullname into zip path and filename: %s", fullPath.c_str());
+    ZipSyncAssertF(pos != std::string::npos, "Cannot split fullname into zip path and filename: %s", fullPath.c_str());
     zipPath = fullPath.substr(0, pos);
     filename = fullPath.substr(pos + 2);
 }
@@ -85,12 +85,12 @@ bool IfFileExists(const std::string &path) {
 
 void RemoveFile(const std::string &path) {
     int res = remove(path.c_str());
-    TdmSyncAssertF(res == 0, "Failed to remove file %s (error %d)", path.c_str(), res);
+    ZipSyncAssertF(res == 0, "Failed to remove file %s (error %d)", path.c_str(), res);
 }
 
 void RenameFile(const std::string &oldPath, const std::string &newPath) {
     int res = rename(oldPath.c_str(), newPath.c_str());
-    TdmSyncAssertF(res == 0, "Failed to rename file %s to %s (error %d)", oldPath.c_str(), newPath.c_str(), res);
+    ZipSyncAssertF(res == 0, "Failed to rename file %s to %s (error %d)", oldPath.c_str(), newPath.c_str(), res);
 }
 
 bool CreateDir(const std::string &dirPath) {
@@ -104,7 +104,7 @@ bool CreateDir(const std::string &dirPath) {
         res = errno;
     if (res == EEXIST)
         return false;
-    TdmSyncAssertF(res == 0, "Failed to create directory %s (error %d)", dirPath.c_str(), res);
+    ZipSyncAssertF(res == 0, "Failed to create directory %s (error %d)", dirPath.c_str(), res);
     return true;
 }
 

@@ -8,7 +8,7 @@
 #include "ZipUtils.h"
 
 
-namespace TdmSync {
+namespace ZipSync {
 
 /**
  * A type of location of a provided file.
@@ -186,7 +186,7 @@ template<class File, class Manifest> struct IndexIterator {
         if (file) {
             _manifest = &manifest;
             _index = file - &manifest[0];
-            TdmSyncAssert(_index >= 0 && _index < manifest.size());
+            ZipSyncAssert(_index >= 0 && _index < manifest.size());
         }
         else {
             _manifest = nullptr;

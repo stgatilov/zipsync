@@ -2,7 +2,7 @@
 
 #include <string>
 
-namespace TdmSync {
+namespace ZipSync {
 
 /**
  * File path or http URL in both absolute and relative format.

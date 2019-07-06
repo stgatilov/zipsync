@@ -8,7 +8,7 @@
 #include "ZipUtils.h"
 
 
-namespace TdmSync {
+namespace ZipSync {
 
 void UpdateProcess::Init(TargetManifest &&targetMani_, ProvidedManifest &&providedMani_, const std::string &rootDir_) {
     _targetMani = std::move(targetMani_);
@@ -40,7 +40,7 @@ bool UpdateProcess::DevelopPlan(UpdateType type) {
         const TargetFile &tf = _targetMani[i];
         std::string fullPath = GetFullPath(tf.zipPath.abs, tf.filename);
         auto pib = pathToTarget.insert(std::make_pair(fullPath, &tf));
-        TdmSyncAssertF(pib.second, "Duplicate target file at place %s", fullPath.c_str());
+        ZipSyncAssertF(pib.second, "Duplicate target file at place %s", fullPath.c_str());
     }
 
     //find provided files which are already in-place
@@ -126,7 +126,7 @@ public:
         for (auto &zip : _zips)
             if (zip._zipPath == zipPath)
                 return zip;
-        TdmSyncAssert(false);
+        ZipSyncAssert(false);
     }
 
     //indexed as matches: false if provided file was copied in "raw" mode, true if in recompressing mode
@@ -145,12 +145,12 @@ public:
 
     void CheckPreconditions() const {
         //verify that we are ready to do repacking
-        TdmSyncAssertF(_owner._matches.size() == _owner._targetMani.size(), "RepackZips: DevelopPlan not called yet");
+        ZipSyncAssertF(_owner._matches.size() == _owner._targetMani.size(), "RepackZips: DevelopPlan not called yet");
         for (Match m : _owner._matches) {
             std::string fullPath = GetFullPath(m.target->zipPath.abs, m.target->filename);
-            TdmSyncAssertF(m.provided, "RepackZips: target file %s is not provided", fullPath.c_str());
-            TdmSyncAssertF(m.provided->location == ProvidedLocation::Inplace || m.provided->location == ProvidedLocation::Local, "RepackZips: target file %s is not available locally", fullPath.c_str());
-            TdmSyncAssert(_owner._managedZips.count(m.target->zipPath.abs));
+            ZipSyncAssertF(m.provided, "RepackZips: target file %s is not provided", fullPath.c_str());
+            ZipSyncAssertF(m.provided->location == ProvidedLocation::Inplace || m.provided->location == ProvidedLocation::Local, "RepackZips: target file %s is not available locally", fullPath.c_str());
+            ZipSyncAssert(_owner._managedZips.count(m.target->zipPath.abs));
         }
     }
 
@@ -298,7 +298,7 @@ public:
 
             //find provided file (TODO: optimize?)
             UnzFileHolder zf(m.provided->zipPath.abs.c_str());
-            TdmSyncAssert(unzLocateFileAtBytes(zf, m.provided->filename.c_str(), m.provided->byterange[0], m.provided->byterange[1]));
+            ZipSyncAssert(unzLocateFileAtBytes(zf, m.provided->filename.c_str(), m.provided->byterange[0], m.provided->byterange[1]));
 
             //can we avoid recompressing the file?
             unz_file_info info;
@@ -330,19 +330,19 @@ public:
         std::string fullPath = GetFullPath(have.zipPath.abs, have.filename);
         //zipPath is different while repacking
         //package does not need to be checked
-        TdmSyncAssertF(want.filename == have.filename, "Wrong filename of %s after repack: need %s", fullPath.c_str(), want.filename.c_str());
-        TdmSyncAssertF(want.contentsHash == have.contentsHash, "Wrong contents hash of %s after repack", fullPath.c_str());
-        TdmSyncAssertF(want.fhContentsSize == have.fhContentsSize, "Wrong contents size of %s after repack", fullPath.c_str());
-        TdmSyncAssertF(want.fhCrc32 == have.fhCrc32, "Wrong crc32 of %s after repack", fullPath.c_str());
+        ZipSyncAssertF(want.filename == have.filename, "Wrong filename of %s after repack: need %s", fullPath.c_str(), want.filename.c_str());
+        ZipSyncAssertF(want.contentsHash == have.contentsHash, "Wrong contents hash of %s after repack", fullPath.c_str());
+        ZipSyncAssertF(want.fhContentsSize == have.fhContentsSize, "Wrong contents size of %s after repack", fullPath.c_str());
+        ZipSyncAssertF(want.fhCrc32 == have.fhCrc32, "Wrong crc32 of %s after repack", fullPath.c_str());
         if (_owner._updateType == UpdateType::SameCompressed) {
-            TdmSyncAssertF(want.compressedHash == have.compressedHash, "Wrong compressed hash of %s after repack", fullPath.c_str());
-            TdmSyncAssertF(want.fhCompressedSize == have.fhCompressedSize, "Wrong compressed size of %s after repack", fullPath.c_str());
+            ZipSyncAssertF(want.compressedHash == have.compressedHash, "Wrong compressed hash of %s after repack", fullPath.c_str());
+            ZipSyncAssertF(want.fhCompressedSize == have.fhCompressedSize, "Wrong compressed size of %s after repack", fullPath.c_str());
         }
-        TdmSyncAssertF(want.fhCompressionMethod == have.fhCompressionMethod, "Wrong compression method of %s after repack", fullPath.c_str());
-        TdmSyncAssertF(want.fhGeneralPurposeBitFlag == have.fhGeneralPurposeBitFlag, "Wrong flags of %s after repack", fullPath.c_str());
-        TdmSyncAssertF(want.fhLastModTime == have.fhLastModTime, "Wrong modification time of %s after repack", fullPath.c_str());
-        TdmSyncAssertF(want.fhInternalAttribs == have.fhInternalAttribs, "Wrong internal attribs of %s after repack", fullPath.c_str());
-        TdmSyncAssertF(want.fhExternalAttribs == have.fhExternalAttribs, "Wrong external attribs of %s after repack", fullPath.c_str());
+        ZipSyncAssertF(want.fhCompressionMethod == have.fhCompressionMethod, "Wrong compression method of %s after repack", fullPath.c_str());
+        ZipSyncAssertF(want.fhGeneralPurposeBitFlag == have.fhGeneralPurposeBitFlag, "Wrong flags of %s after repack", fullPath.c_str());
+        ZipSyncAssertF(want.fhLastModTime == have.fhLastModTime, "Wrong modification time of %s after repack", fullPath.c_str());
+        ZipSyncAssertF(want.fhInternalAttribs == have.fhInternalAttribs, "Wrong internal attribs of %s after repack", fullPath.c_str());
+        ZipSyncAssertF(want.fhExternalAttribs == have.fhExternalAttribs, "Wrong external attribs of %s after repack", fullPath.c_str());
     }
 
     void AnalyzeRepackedZip(const ZipInfo &zip) {
@@ -369,7 +369,7 @@ public:
 
             //decrement ref count on zip (which might allow to "reduce" it in ReduceOldZips)
             int &usedCnt = FindZip(m.provided->zipPath.abs)._usedCnt;
-            TdmSyncAssert(usedCnt >= 0);
+            ZipSyncAssert(usedCnt >= 0);
             usedCnt--;
             //increment ref count on compressed hash
             _hashProvidedCnt[providedNew.compressedHash]++;
@@ -406,7 +406,7 @@ public:
                     ProvidedIter found;
                     for (ProvidedIter pf : zip._provided) {
                         if (pf->byterange[0] == range[0] && pf->byterange[1] == range[1]) {
-                            TdmSyncAssertF(!found, "Provided manifest of %s has duplicate byteranges", zip._zipPath.c_str());
+                            ZipSyncAssertF(!found, "Provided manifest of %s has duplicate byteranges", zip._zipPath.c_str());
                             found = pf;
                         }
                     }
@@ -414,7 +414,7 @@ public:
                     unz_file_info info;
                     char filename[SIZE_PATH];
                     SAFE_CALL(unzGetCurrentFileInfo(zf, &info, filename, sizeof(filename), NULL, 0, NULL, 0));
-                    TdmSyncAssertF(found, "Provided manifest of %s doesn't have file %s", zip._zipPath.c_str(), filename);
+                    ZipSyncAssertF(found, "Provided manifest of %s doesn't have file %s", zip._zipPath.c_str(), filename);
                     int &usedCnt = _hashProvidedCnt.at(found->compressedHash);
                     if (usedCnt == 1) {
                         //not available otherwise -> repack
@@ -486,7 +486,7 @@ public:
                 RemoveFile(zip._zipPathRepacked);
             }
             else {
-                TdmSyncAssertF(!IfFileExists(zip._zipPath), "Zip %s exists immediately before renaming repacked file", zip._zipPath.c_str());
+                ZipSyncAssertF(!IfFileExists(zip._zipPath), "Zip %s exists immediately before renaming repacked file", zip._zipPath.c_str());
                 RenameFile(zip._zipPathRepacked, zip._zipPath);
             }
             //update provided files in repacked zip (all of them must be among matches by now)
