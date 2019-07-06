@@ -6,8 +6,8 @@
 #include <map>
 #include "StdString.h"
 #include "StdFilesystem.h"
-#include "tsassert.h"
-#include "TdmSync.h"
+#include "ZSAssert.h"
+#include "ZipSync.h"
 #include "zip.h"
 
 

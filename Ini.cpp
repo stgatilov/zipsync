@@ -1,7 +1,7 @@
 #include "Ini.h"
 #include "Utils.h"
 #include "StdString.h"
-#include "tsassert.h"
+#include "ZSAssert.h"
 
 
 namespace ZipSync {

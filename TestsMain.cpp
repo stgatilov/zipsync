@@ -5,7 +5,7 @@
 #include <chrono>
 
 #include "StdFilesystem.h"
-#include "TdmSync.h"
+#include "ZipSync.h"
 #include "Fuzzer.h"
 using namespace ZipSync;
 
