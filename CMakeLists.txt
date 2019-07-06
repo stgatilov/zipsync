@@ -11,8 +11,8 @@ set(sources
     minizip_extra.h
     minizip_private.h
 
-    tsassert.h
-    tsassert.cpp
+    ZSAssert.h
+    ZSAssert.cpp
 
     StdFilesystem.cpp
     StdFilesystem.h
@@ -33,10 +33,10 @@ set(sources
     Manifest.cpp
     LocalCache.h
     LocalCache.cpp
-    TdmSync.h
-    TdmSync.cpp
+    ZipSync.h
+    ZipSync.cpp
 
-    TdmSync.natvis
+    ZipSync.natvis
 )
 
 set(tests_sources
