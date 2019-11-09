@@ -35,6 +35,8 @@ set(sources
     LocalCache.cpp
     ZipSync.h
     ZipSync.cpp
+    Downloader.h
+    Downloader.cpp
 
     ZipSync.natvis
 )

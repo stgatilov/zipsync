@@ -6,6 +6,7 @@
 #include "ZSAssert.h"
 #include "Utils.h"
 #include "ZipUtils.h"
+#include "Downloader.h"
 
 
 namespace ZipSync {
@@ -552,6 +553,27 @@ public:
 void UpdateProcess::RepackZips() {
     Repacker impl(*this);
     impl.DoAll();
+}
+
+void UpdateProcess::DownloadRemoteFiles(const std::string &downloadDir) {
+    ProvidedManifest addedMani;
+    addedMani.SetComment("downloaded from remotes");
+
+    Downloader downloader;
+    for (Match m : _matches) {
+        if (m.provided->location != ProvidedLocation::RemoteHttp)
+            continue;
+        DownloadSource src;
+        src.url = m.provided->zipPath.abs;
+        src.byterange[0] = m.provided->byterange[0];
+        src.byterange[1] = m.provided->byterange[1];
+        downloader.EnqueueDownload(src, [m, &addedMani](const DownloadSource &src, const void *data, uint32_t bytes) {
+            //TODO: write data
+            //TODO: update addedMani
+        });
+    }
+
+    downloader.DownloadAll();
 }
 
 }
