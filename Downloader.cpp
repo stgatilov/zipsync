@@ -105,7 +105,7 @@ void Downloader::DownloadOneRequest(const std::string &url, const std::vector<in
         }
         char boundary[128] = {0};
         if (sscanf(str.c_str(), "Content-Type: multipart/byteranges; boundary=%s", boundary) == 1) {
-            resp.boundary = std::string("\r\n--") + boundary + "\r\n";
+            resp.boundary = std::string("\r\n--") + boundary;// + "\r\n";
         }
         return size;
     };
@@ -138,6 +138,7 @@ void Downloader::DownloadOneRequest(const std::string &url, const std::vector<in
     curl_easy_setopt(curl.get(), CURLOPT_HEADERDATA, this);
     curl_easy_setopt(curl.get(), CURLOPT_XFERINFOFUNCTION, (curl_xferinfo_callback)xferinfo_callback);
     curl_easy_setopt(curl.get(), CURLOPT_XFERINFODATA, this);
+    curl_easy_setopt(curl.get(), CURLOPT_NOPROGRESS, 0);
     UpdateProgress();
     CURLcode ret = curl_easy_perform(curl.get());
     curl.reset();
@@ -192,7 +193,7 @@ void Downloader::BreakMultipartResponse(const CurlResponse &response, std::vecto
             boundaryPos.push_back(pos);
 
     for (size_t i = 0; i+1 < boundaryPos.size(); i++) {
-        size_t left = boundaryPos[i] + bound.size();
+        size_t left = boundaryPos[i] + bound.size() + 2;        //+2 for "\r\n" or "--"
         size_t right = boundaryPos[i+1];
 
         //parse header into sequence of lines
