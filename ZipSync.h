@@ -54,7 +54,7 @@ public:
     //decide how to execute the update (which files to find where)
     bool DevelopPlan(UpdateType type);
 
-    void DownloadRemoteFiles(const std::string &downloadDir);
+    void DownloadRemoteFiles();
 
     //having all matches available locally, perform the update
     //TODO: pass progress callback

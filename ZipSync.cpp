@@ -182,6 +182,8 @@ public:
         }
         for (int i = 0; i < _owner._providedMani.size(); i++) {
             const ProvidedFile &pf = _owner._providedMani[i];
+            if (pf.location == ProvidedLocation::RemoteHttp)
+                continue;
             FindZip(pf.zipPath.abs)._provided.push_back(ProvidedIter(_owner._providedMani, i));
         }
         for (int i = 0; i < _owner._matches.size(); i++) {
@@ -555,25 +557,107 @@ void UpdateProcess::RepackZips() {
     impl.DoAll();
 }
 
-void UpdateProcess::DownloadRemoteFiles(const std::string &downloadDir) {
-    ProvidedManifest addedMani;
-    addedMani.SetComment("downloaded from remotes");
+void UpdateProcess::DownloadRemoteFiles() {
+    struct UrlData {
+        PathAR path;
+        StdioFileHolder file;
+        int finishedCount = 0, totalCount = 0;
+        std::map<int, uint32_t> matchIdxToStart;
+        UrlData() : file(nullptr) {}
+    };
 
+    std::map<std::string, UrlData> urlStates;
     Downloader downloader;
-    for (Match m : _matches) {
+    for (int midx = 0; midx < _matches.size(); midx++) {
+        const Match &m = _matches[midx];
         if (m.provided->location != ProvidedLocation::RemoteHttp)
             continue;
+        const std::string &url = m.provided->zipPath.abs;
+
+        PathAR &fn = urlStates[url].path;
+        if (fn.abs.empty()) {
+            for (int t = 0; t < 100; t++) {
+                fn = PathAR::FromRel("__download" + std::to_string(t) + "__" + m.provided->zipPath.rel, _rootDir);
+                if (!IfFileExists(fn.abs))
+                    break;
+            }
+        }
+        urlStates[url].totalCount++;
+
         DownloadSource src;
-        src.url = m.provided->zipPath.abs;
+        src.url = url;
         src.byterange[0] = m.provided->byterange[0];
         src.byterange[1] = m.provided->byterange[1];
-        downloader.EnqueueDownload(src, [m, &addedMani](const DownloadSource &src, const void *data, uint32_t bytes) {
-            //TODO: write data
-            //TODO: update addedMani
+        downloader.EnqueueDownload(src, [this,&urlStates,midx](const void *data, uint32_t bytes) {
+            const Match &m = _matches[midx];
+            const std::string &url = m.provided->zipPath.abs;
+            UrlData &state = urlStates[url];
+            if (!state.file)
+                state.file = StdioFileHolder(state.path.abs.c_str(), "wb");
+
+            state.matchIdxToStart[midx] = ftell(state.file);
+            ZipSyncAssert(state.matchIdxToStart[midx] >= 0);
+            size_t written = fwrite(data, 1, bytes, state.file);
+            ZipSyncAssert(written == bytes);
+
+            if (++state.finishedCount == state.totalCount)
+                state.file.reset();
         });
     }
 
+    downloader.SetProgressCallback([this](double ratio, const char *message) {
+        //TODO
+    });
     downloader.DownloadAll();
+
+    for (const auto &pKV : urlStates) {
+        const std::string  &url = pKV.first;
+        const UrlData &state = pKV.second;
+
+        minizipAddCentralDirectory(state.path.abs.c_str());
+        UnzFileHolder zf(state.path.abs.c_str());
+
+        for (const auto &pMO : state.matchIdxToStart) {
+            int matchIdx = pMO.first;
+            uint32_t offset = pMO.second;
+            Match &m = _matches[matchIdx];
+
+            //verify hash of the downloaded file (we must be sure that it is correct)
+            //TODO: what if bad mirror takes compressed file and marks at as uncompressed in zip?...
+            uint32_t size = (m.provided->byterange[1] - m.provided->byterange[0]);
+            ZipSyncAssert(unzLocateFileAtBytes(zf, m.provided->filename.c_str(), offset, offset + size));
+            SAFE_CALL(unzOpenCurrentFile2(zf, NULL, NULL, true));
+            Hasher hasher;
+            char buffer[SIZE_FILEBUFFER];
+            int processedBytes = 0;
+            while (1) {
+                int bytes = unzReadCurrentFile(zf, buffer, sizeof(buffer));
+                if (bytes < 0)
+                    SAFE_CALL(bytes);
+                if (bytes == 0)
+                    break;
+                hasher.Update(buffer, bytes);
+                processedBytes += bytes;
+            } 
+            HashDigest obtainedHash = hasher.Finalize();
+            SAFE_CALL(unzCloseCurrentFile(zf));
+
+            const HashDigest &expectedHash = m.provided->compressedHash;
+            std::string fullPath = GetFullPath(url, m.provided->filename);
+            ZipSyncAssertF(obtainedHash == expectedHash, "Hash of \"%s\" after download is %s instead of %s", fullPath.c_str(), obtainedHash.Hex().c_str(), expectedHash.Hex().c_str());
+
+            ProvidedFile pf = *m.provided;
+            pf.zipPath = state.path;
+            pf.byterange[0] = offset;
+            pf.byterange[1] = offset + size;
+            pf.location = ProvidedLocation::Local;
+
+            int pi = _providedMani.size();
+            _providedMani.AppendFile(pf);
+            m.provided = ProvidedIter(_providedMani, pi);
+        }
+    }
+
 }
 
 }

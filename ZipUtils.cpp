@@ -105,4 +105,79 @@ void minizipCopyFile(unzFile zf, zipFile zfOut, const char *filename, int method
     SAFE_CALL(unzCloseCurrentFile(zf));
 }
 
+#pragma pack(push, 1)
+struct ZipLocalHeader {
+    uint32_t magic;
+    uint16_t versionNeeded;
+    uint16_t flag;
+    uint16_t compMethod;
+    uint32_t timeDate;
+    uint32_t crc32;
+    uint32_t compSize;
+    uint32_t uncompSize;
+    uint16_t filenameLen;
+    uint16_t extraLen;
+};
+struct ZipCentralHeader {
+    uint32_t magic;
+    uint16_t versionMade;
+    uint16_t versionNeeded;
+    uint16_t flag;
+    uint16_t compMethod;
+    uint32_t timeDate;
+    uint32_t crc32;
+    uint32_t compSize;
+    uint32_t uncompSize;
+    uint16_t filenameLen;
+    uint16_t extraLen;
+    uint16_t commentLen;
+    uint16_t diskNum;
+    uint16_t internalAttr;
+    uint32_t externalAttr;
+    uint32_t offset;
+};
+struct ZipEndOfCentral {
+    uint32_t magic;
+    uint16_t thisDiskNum;
+    uint16_t startDiskNum;
+    uint16_t numCentralHeaders;
+    uint16_t totalCentralHeaders;
+    uint32_t centralDirSize;
+    uint32_t offset;
+    uint16_t commentLen;
+};
+#pragma pack(pop)
+void minizipAddCentralDirectory(const char *zipFilename) {
+    StdioFileHolder f(zipFilename, "r+b");
+    std::vector<ZipCentralHeader> headers;
+    std::vector<std::string> filenames;
+    ZipLocalHeader lh;
+    while (fread(&lh, sizeof(lh), 1, f) == 1) {
+        uint32_t offset = ftell(f) - sizeof(lh);
+        ZipSyncAssert(lh.magic == 0x04034b50);
+        ZipSyncAssert(lh.extraLen == 0);
+        std::unique_ptr<char[]> filename(new char[lh.filenameLen]);
+        ZipSyncAssert(fread(filename.get(), lh.filenameLen, 1, f) == 1);
+        ZipCentralHeader ch = {0};
+        ch.magic = 0x02014b50;
+        memcpy(&ch.versionNeeded, &lh.versionNeeded, sizeof(ZipLocalHeader) - offsetof(ZipLocalHeader, versionNeeded));
+        ch.offset = offset;
+        headers.push_back(ch);
+        filenames.push_back(std::string(filename.get(), filename.get() + lh.filenameLen));
+        ZipSyncAssert(fseek(f, lh.compSize, SEEK_CUR) == 0);
+    }
+    fseek(f, 0, SEEK_END);
+    size_t centralOffset = ftell(f);
+    for (int i = 0; i < headers.size(); i++) {
+        fwrite(&headers[i], sizeof(headers[i]), 1, f);
+        fwrite(filenames[i].c_str(), 1, filenames[i].size(), f);
+    }
+    ZipEndOfCentral eocd = {0};
+    eocd.magic = 0x06054b50;
+    eocd.numCentralHeaders = eocd.totalCentralHeaders = headers.size();
+    eocd.centralDirSize = ftell(f) - centralOffset;
+    eocd.offset = centralOffset;
+    fwrite(&eocd, sizeof(eocd), 1, f);
+}
+
 }

@@ -64,4 +64,7 @@ bool unzLocateFileAtBytes(unzFile zf, const char *filename, uint32_t from, uint3
 
 void minizipCopyFile(unzFile zf, zipFile zfOut, const char *filename, int method, int flags, uint16_t internalAttribs, uint32_t externalAttribs, uint32_t dosDate, bool copyRaw, uint32_t crc, uint32_t contentsSize);
 
+//given a tightly packed zip file without central directory, rebuilds it and appends it to the end of file
+void minizipAddCentralDirectory(const char *filename);
+
 }

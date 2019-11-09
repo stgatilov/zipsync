@@ -26,6 +26,8 @@ public:
     StdioFileHolder(FILE *f);
     StdioFileHolder(const char *path, const char *mode);    //checks that file is opened successfully
     ~StdioFileHolder();
+    StdioFileHolder(StdioFileHolder&&) = default;
+    StdioFileHolder& operator=(StdioFileHolder&&) = default;
     operator FILE*() const { return get(); }
 };
 
