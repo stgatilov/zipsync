@@ -1,5 +1,5 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
-#include "doctest/doctest.h"
+#include <doctest/doctest.h>
 
 #include <random>
 #include <chrono>
@@ -9,8 +9,8 @@
 #include "Fuzzer.h"
 using namespace ZipSync;
 
-#include "zip.h"
-#include "blake2.h"
+#include <zip.h>
+#include <blake2.h>
 
 
 #include <stdio.h>  /* defines FILENAME_MAX */

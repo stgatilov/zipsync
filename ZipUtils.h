@@ -3,8 +3,8 @@
 #include <memory>
 #include "ZSAssert.h"
 
-#include "unzip.h"
-#include "zip.h"
+#include <unzip.h>
+#include <zip.h>
 
 
 namespace ZipSync {

@@ -5,7 +5,7 @@
 
 #pragma warning(push)
 #pragma warning(disable:4804)  //warning C4804: '/': unsafe use of type 'bool' in operation
-#include "blake2.h"
+#include <blake2.h>
 #pragma warning(pop)
 
 

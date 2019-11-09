@@ -8,7 +8,7 @@
 #include "StdFilesystem.h"
 #include "ZSAssert.h"
 #include "ZipSync.h"
-#include "zip.h"
+#include <zip.h>
 
 
 namespace ZipSync {
