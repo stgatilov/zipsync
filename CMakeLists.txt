@@ -52,6 +52,8 @@ set(playground_sources
 )
 
 set(zipsynccmd_sources
+    Wildcards.h
+    Wildcards.cpp
     CommandLine.cpp
 )
 
@@ -74,4 +76,4 @@ add_executable(playground ${playground_sources})
 target_link_libraries(playground libzipsync)
 
 add_executable(commandline ${zipsynccmd_sources})
-target_link_libraries(commandline libzipsync)
+target_link_libraries(commandline libzipsync CONAN_PKG::args)
