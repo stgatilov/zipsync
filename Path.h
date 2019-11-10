@@ -12,6 +12,7 @@ struct PathAR {
     std::string rel;
 
     static bool IsHttp(const std::string &path);
+    static bool IsAbsolute(const std::string &path);
     bool IsUrl() const { return IsHttp(abs); }
     std::string GetRootDir() const;
 

@@ -15,6 +15,16 @@ bool PathAR::IsHttp(const std::string &path) {
     return stdext::starts_with(path, "http://");
 }
 
+bool PathAR::IsAbsolute(const std::string &path) {
+    if (path.empty())
+        return false;   //wrong path, actually
+    if (path[0] == '/')
+        return true;
+    if (path.find(':') != std::string::npos)
+        return true;
+    return false;
+}
+
 static void CheckPath(const std::string &path, bool relative) {
     for (int i = 0; i < path.size(); i++)
         ZipSyncAssertF(uint8_t(path[i]) >= 32, "Non-printable character %d in path", int(path[i]));
