@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <iostream>
 #include "Wildcards.h"
+#include <thread>
+#include <mutex>
 
 
 #include <filesystem>
@@ -108,6 +110,53 @@ private:
     }
 };
 
+void ParallelFor(int from, int to, const std::function<void(int)> &body, int thrNum = -1, int blockSize = 1) {
+    if (thrNum == 1) {
+        for (int i = from; i < to; i++)
+            body(i);
+    }
+    else {
+        if (thrNum <= 0)
+            thrNum = std::thread::hardware_concurrency();
+        //int blockNum = (to - from + blockSize-1) / blockSize;
+
+        std::vector<std::thread> threads(thrNum);
+        int lastAssigned = from;
+        std::exception_ptr workerException;
+        std::mutex mutex;
+
+        for (int t = 0; t < thrNum; t++) {
+            auto ThreadFunc = [&,t]() {
+                while (1) {
+                    int left, right;
+                    {
+                        std::lock_guard<std::mutex> lock(mutex);
+                        if (workerException || lastAssigned == to)
+                            break;
+                        left = lastAssigned;
+                        right = std::min(lastAssigned + blockSize, to);
+                        lastAssigned = right;
+                    }
+                    try {
+                        for (int i = left; i < right; i++) {
+                            body(i);
+                        }
+                    } catch(...) {
+                        std::lock_guard<std::mutex> lock(mutex);
+                        workerException = std::current_exception();
+                        break;
+                    }
+                }
+            };
+            threads[t] = std::thread(ThreadFunc);
+        }
+        for (int t = 0; t < thrNum; t++)
+            threads[t].join();
+
+        if (workerException)
+            std::rethrow_exception(workerException);
+    }
+}
 
 void CommandNormalize(args::Subparser &parser) {
     args::ValueFlag<std::string> argRootDir(parser, "root", "Relative paths to zips are based from this directory", {'r', "root"});
@@ -154,6 +203,7 @@ void CommandAnalyze(args::Subparser &parser) {
     args::ValueFlag<std::string> argProvidedMani(parser, "provMani", "Path where Provided manifest would be written", {'p', "provided"}, "provided.ini");
     args::Flag argNoTarget(parser, "notarget", "Do not generate Target manifest", {"no-target"});
     args::Flag argNoProvided(parser, "noprovided", "Do not generate Provided manifest", {"no-provided"});
+    args::ValueFlag<int> argThreads(parser, "threads", "Use this number of parallel threads to accelerate analysis (0 = max)", {'j', "threads"}, 1);
     args::PositionalList<std::string> argZips(parser, "zips", "List of files or globs specifying which zips in root directory to include");
     args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"}, args::Options::HiddenFromDescription);
     parser.Parse();
@@ -162,27 +212,44 @@ void CommandAnalyze(args::Subparser &parser) {
     std::string targetManiPath = GetPath(argTargetMani.Get(), root);
     std::string providManiPath = GetPath(argProvidedMani.Get(), root);
     std::vector<std::string> zipPaths = CollectFilePaths(argZips.Get(), root);
+    int threadsNum = argThreads.Get();
 
     double totalSize = 1.0, doneSize = 0.0;
     for (auto zip : zipPaths)
         totalSize += SizeOfFile(zip);
-
-    ZipSync::ProvidedManifest providMani;
-    ZipSync::TargetManifest targetMani;
+    std::vector<ZipSync::ProvidedManifest> providManis(zipPaths.size());
+    std::vector<ZipSync::TargetManifest> targetManis(zipPaths.size());
     {
         ProgressIndicator progress;
-        for (std::string zipPath : zipPaths) {
-            progress.Update(doneSize / totalSize, "Analysing \"" + zipPath + "\"...");
-            ZipSync::AppendManifestsFromLocalZip(zipPath, root, ZipSync::ProvidedLocation::Local, "", providMani, targetMani);
-            doneSize += SizeOfFile(zipPath);
-        }
+        std::mutex mutex;
+        ParallelFor(0, zipPaths.size(), [&](int index) {
+            std::string zipPath = zipPaths[index];
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                progress.Update(doneSize / totalSize, "Analysing \"" + zipPath + "\"...");
+            }
+            ZipSync::AppendManifestsFromLocalZip(zipPath, root, ZipSync::ProvidedLocation::Local, "", providManis[index], targetManis[index]);
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                doneSize += SizeOfFile(zipPath);
+                progress.Update(doneSize / totalSize, "Analysed  \"" + zipPath + "\"...");
+            }
+        }, threadsNum);
         progress.Update(1.0, "Analysing done");
     }
 
-    if (!argNoTarget)
+    if (!argNoTarget) {
+        ZipSync::TargetManifest targetMani;
+        for (const auto &tm : targetManis)
+            targetMani.AppendManifest(tm);
         ZipSync::WriteIniFile(targetManiPath.c_str(), targetMani.WriteToIni());
-    if (!argNoProvided)
+    }
+    if (!argNoProvided) {
+        ZipSync::ProvidedManifest providMani;
+        for (const auto &pm : providManis)
+            providMani.AppendManifest(pm);
         ZipSync::WriteIniFile(providManiPath.c_str(), providMani.WriteToIni());
+    }
 }
 
 int main(int argc, char **argv) {
