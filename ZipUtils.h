@@ -67,4 +67,7 @@ void minizipCopyFile(unzFile zf, zipFile zfOut, const char *filename, int method
 //given a tightly packed zip file without central directory, rebuilds it and appends it to the end of file
 void minizipAddCentralDirectory(const char *filename);
 
+//repack given zip file so that it gets accepted by ZipSync
+void minizipNormalize(const char *srcFilename, const char *dstFilename = NULL);
+
 }

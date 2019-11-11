@@ -1,5 +1,7 @@
 #include "ZipUtils.h"
 #include "Utils.h"
+#include "Path.h"
+#include <algorithm>
 
 
 namespace ZipSync {
@@ -178,6 +180,82 @@ void minizipAddCentralDirectory(const char *zipFilename) {
     eocd.centralDirSize = ftell(f) - centralOffset;
     eocd.offset = centralOffset;
     fwrite(&eocd, sizeof(eocd), 1, f);
+}
+
+//note: see AnalyzeCurrentFile in Manifest.cpp for exact requirements
+void minizipNormalize(const char *srcFilename, const char *dstFilename) {
+    if (!dstFilename)
+        dstFilename = srcFilename;
+
+    std::string tempFilename = PrefixFile(dstFilename, "__normalized__");
+    struct FileLocation {
+        std::string filename;
+        uint32_t range[2];
+        bool operator< (const FileLocation &b) const {
+            return std::make_pair(filename, range[0]) < std::make_pair(b.filename, b.range[0]);
+        }
+    };
+    std::vector<FileLocation> files;
+
+    UnzFileHolder zfIn(srcFilename);
+    SAFE_CALL(unzGoToFirstFile(zfIn));
+    while (1) {
+        char filename[SIZE_PATH];
+        unz_file_info info;
+        SAFE_CALL(unzGetCurrentFileInfo(zfIn, &info, filename, SIZE_PATH, NULL, 0, NULL, 0));
+        FileLocation floc;
+        uint32_t temp;
+        unzGetCurrentFilePosition(zfIn, &floc.range[0], &temp, &floc.range[1]);
+        floc.filename = filename;
+        int len = strlen(filename);
+        bool isDirectory = info.uncompressed_size == 0 && info.compression_method == 0 && ((info.external_fa & 16) || (len > 0 && filename[len-1] == '/'));
+        if (!isDirectory) 
+            files.push_back(floc);
+
+        int err = unzGoToNextFile(zfIn);
+        if (err == UNZ_END_OF_LIST_OF_FILE)
+            break;
+        SAFE_CALL(err);
+    }
+
+    std::stable_sort(files.begin(), files.end());
+
+    ZipFileHolder zfOut(tempFilename.c_str());
+    for (const FileLocation &f : files) {
+        bool found = unzLocateFileAtBytes(zfIn, f.filename.c_str(), f.range[0], f.range[1]);
+        ZipSyncAssert(found);
+
+        unz_file_info infoIn;
+        SAFE_CALL(unzGetCurrentFileInfo(zfIn, &infoIn, NULL, 0, NULL, 0, NULL, 0));
+        ZipSyncAssertF(infoIn.compression_method == 0 || infoIn.compression_method == 8, "File %s has compression %d (not supported)", f.filename.c_str(), infoIn.compression_method);
+        ZipSyncAssertF((infoIn.flag & (~0x06)) == 0, "File %s has flags %d (not supported)", f.filename.c_str(), infoIn.flag);
+        ZipSyncAssertF((infoIn.internal_fa & (~0x01)) == 0, "File %s has internal attribs %d (not supported)", f.filename.c_str(), infoIn.internal_fa);
+
+        SAFE_CALL(unzOpenCurrentFile2(zfIn, NULL, NULL, true));
+        zip_fileinfo infoOut;
+        infoOut.dosDate = infoIn.dosDate;
+        infoOut.internal_fa = infoIn.internal_fa;
+        infoOut.external_fa = infoIn.external_fa & 0xFF;    //drop anything except for lower byte (which has MS-DOS attribs)
+        int level = CompressionLevelFromGpFlags(infoIn.flag);
+        SAFE_CALL(zipOpenNewFileInZip2(zfOut, f.filename.c_str(), &infoOut, NULL, 0, NULL, 0, NULL, infoIn.compression_method, level, true));
+        while (1) {
+            char buffer[SIZE_FILEBUFFER];
+            int bytes = unzReadCurrentFile(zfIn, buffer, sizeof(buffer));
+            if (bytes < 0)
+                SAFE_CALL(bytes);
+            if (bytes == 0)
+                break;
+            SAFE_CALL(zipWriteInFileInZip(zfOut, buffer, bytes));
+        }
+        SAFE_CALL(zipCloseFileInZipRaw(zfOut, infoIn.uncompressed_size, infoIn.crc));
+        SAFE_CALL(unzCloseCurrentFile(zfIn));
+    }
+    zfIn.reset();
+    zfOut.reset();
+
+    if (IfFileExists(dstFilename))
+        RemoveFile(dstFilename);
+    RenameFile(tempFilename, dstFilename);
 }
 
 }
