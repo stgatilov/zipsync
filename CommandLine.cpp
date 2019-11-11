@@ -22,6 +22,9 @@ std::vector<std::string> EnumerateFilesInDirectory(const std::string &root) {
 std::string GetCwd() {
     return fs::current_path().generic_string();
 }
+size_t SizeOfFile(const std::string &path) {
+    return fs::file_size(path);
+}
 
 std::string NormalizeSlashes(std::string path) {
     for (char &ch : path)
@@ -68,6 +71,43 @@ std::vector<std::string> CollectFilePaths(const std::vector<std::string> &elemen
     return resPaths;
 }
 
+class ProgressIndicator {
+    std::string content;
+public:
+    ~ProgressIndicator() {
+        Finish();
+    }
+    void Erase() {
+        if (content.empty())
+            return;
+        printf("\r");
+        for (int i = 0; i < content.size(); i++)
+            printf(" ");
+        printf("\r");
+        content.clear();
+    }
+    void Update(const char *line) {
+        Erase();
+        content = line;
+        printf("%s", content.c_str());
+    }
+    void Update(double globalRatio, std::string globalComment, double localRatio = -1.0, std::string localComment = "") {
+        auto PercentOf = [](double value) { return int(value * 100.0 + 0.5); };
+        char buffer[1024];
+        if (localRatio != -1.0 && localComment.size())
+            sprintf(buffer, " %3d%% | %3d%% : %s : %s", PercentOf(globalRatio), PercentOf(localRatio), globalComment.c_str(), localComment.c_str());
+        else
+            sprintf(buffer, " %3d%%        : %s", PercentOf(globalRatio), globalComment.c_str());
+        Update(buffer);
+    }
+private:
+    void Finish() {
+        if (content.empty())
+            return;
+        printf("\n");
+    }
+};
+
 
 void CommandNormalize(args::Subparser &parser) {
     args::ValueFlag<std::string> argRootDir(parser, "root", "Relative paths to zips are based from this directory", {'r', "root"});
@@ -85,15 +125,25 @@ void CommandNormalize(args::Subparser &parser) {
         outDir = NormalizeSlashes(argOutDir.Get());
     std::vector<std::string> zipPaths = CollectFilePaths(argZips.Get(), root);
 
-    for (std::string zip : zipPaths) {
-        if (argOutDir) {
-            std::string rel = ZipSync::PathAR::FromAbs(zip, root).rel;
-            std::string zipOut = ZipSync::PathAR::FromRel(rel, outDir).abs;
-            ZipSync::CreateDirectoriesForFile(zipOut, outDir);
-            ZipSync::minizipNormalize(zip.c_str(), zipOut.c_str());
+    double totalSize = 1.0, doneSize = 0.0;
+    for (auto zip : zipPaths)
+        totalSize += SizeOfFile(zip);
+
+    {
+        ProgressIndicator progress;
+        for (std::string zip : zipPaths) {
+            progress.Update(doneSize / totalSize, ("Normalizing \"" + zip + "\"...").c_str());
+            doneSize += SizeOfFile(zip);
+            if (argOutDir) {
+                std::string rel = ZipSync::PathAR::FromAbs(zip, root).rel;
+                std::string zipOut = ZipSync::PathAR::FromRel(rel, outDir).abs;
+                ZipSync::CreateDirectoriesForFile(zipOut, outDir);
+                ZipSync::minizipNormalize(zip.c_str(), zipOut.c_str());
+            }
+            else
+                ZipSync::minizipNormalize(zip.c_str());
         }
-        else
-            ZipSync::minizipNormalize(zip.c_str());
+        progress.Update(1.0, "Normalizing done");
     }
 }
 
@@ -113,10 +163,21 @@ void CommandAnalyze(args::Subparser &parser) {
     std::string providManiPath = GetPath(argProvidedMani.Get(), root);
     std::vector<std::string> zipPaths = CollectFilePaths(argZips.Get(), root);
 
+    double totalSize = 1.0, doneSize = 0.0;
+    for (auto zip : zipPaths)
+        totalSize += SizeOfFile(zip);
+
     ZipSync::ProvidedManifest providMani;
     ZipSync::TargetManifest targetMani;
-    for (std::string zipPath : zipPaths)
-        ZipSync::AppendManifestsFromLocalZip(zipPath, root, ZipSync::ProvidedLocation::Local, "", providMani, targetMani);
+    {
+        ProgressIndicator progress;
+        for (std::string zipPath : zipPaths) {
+            progress.Update(doneSize / totalSize, "Analysing \"" + zipPath + "\"...");
+            ZipSync::AppendManifestsFromLocalZip(zipPath, root, ZipSync::ProvidedLocation::Local, "", providMani, targetMani);
+            doneSize += SizeOfFile(zipPath);
+        }
+        progress.Update(1.0, "Analysing done");
+    }
 
     if (!argNoTarget)
         ZipSync::WriteIniFile(targetManiPath.c_str(), targetMani.WriteToIni());
@@ -146,7 +207,7 @@ int main(int argc, char **argv) {
         return 1;
     }
     catch (const std::exception &e) {
-        std::cerr << e.what() << std::endl;
+        std::cerr << "Unhandled exception: " << e.what() << std::endl;
         return 2;
     }
     return 0;
