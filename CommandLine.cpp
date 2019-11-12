@@ -70,6 +70,17 @@ std::vector<std::string> CollectFilePaths(const std::vector<std::string> &elemen
                 resPaths.push_back(PathAR::FromRel(path, root).abs);
         }
     }
+
+    //deduplicate
+    std::set<std::string> resSet;
+    int k = 0;
+    for (int i = 0; i < resPaths.size(); i++) {
+        auto pib = resSet.insert(resPaths[i]);
+        if (pib.second)
+            resPaths[k++] = resPaths[i];
+    }
+    resPaths.resize(k);
+
     return resPaths;
 }
 
