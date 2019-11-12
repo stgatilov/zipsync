@@ -27,8 +27,7 @@ void WriteIniFile(const char *path, const IniData &data, IniMode mode) {
         zip_fileinfo info = {0};
         info.dosDate = 0x28210000;  //1 January 2000 --- set it just to make date valid
         SAFE_CALL(zipOpenNewFileInZip(zf, "data.ini", &info, NULL, 0, NULL, 0, NULL, Z_DEFLATED, Z_BEST_COMPRESSION));
-        int written = zipWriteInFileInZip(zf, text.data(), text.size());
-        ZipSyncAssert(written == text.size());
+        SAFE_CALL(zipWriteInFileInZip(zf, text.data(), text.size()));
         SAFE_CALL(zipCloseFileInZip(zf));
     }
     else {

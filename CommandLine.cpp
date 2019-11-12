@@ -188,6 +188,7 @@ void CommandNormalize(args::Subparser &parser) {
     double totalSize = 1.0, doneSize = 0.0;
     for (auto zip : zipPaths)
         totalSize += SizeOfFile(zip);
+    printf("Going to normalize %d zips in %s%s of total size %0.3lf MB\n", int(zipPaths.size()), (root.empty() ? "nowhere" : root.c_str()), (argOutDir ? "" : " inplace"), totalSize * 1e-6);
 
     {
         ProgressIndicator progress;
@@ -228,6 +229,8 @@ void CommandAnalyze(args::Subparser &parser) {
     double totalSize = 1.0, doneSize = 0.0;
     for (auto zip : zipPaths)
         totalSize += SizeOfFile(zip);
+    printf("Going to analyze %d zips in %s of total size %0.3lf MB in %d threads\n", int(zipPaths.size()), root.c_str(), totalSize * 1e-6, threadsNum);
+
     std::vector<ZipSync::ProvidedManifest> providManis(zipPaths.size());
     std::vector<ZipSync::TargetManifest> targetManis(zipPaths.size());
     {
