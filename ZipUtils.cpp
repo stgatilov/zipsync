@@ -27,8 +27,12 @@ ZipFileHolder::ZipFileHolder(zipFile zf)
     : ZipFileUniquePtr(zf, zipCloseNoComment) 
 {}
 ZipFileHolder::ZipFileHolder(const char *path)
-    : ZipFileUniquePtr(zipOpen(path, 0), zipCloseNoComment)
+    : ZipFileUniquePtr(nullptr, zipCloseNoComment)
 {
+    //allow to overwrite
+    if (IfFileExists(path))
+        RemoveFile(path);
+    reset(zipOpen(path, 0));
     ZipSyncAssertF(get(), "Failed to open zip file \"%s\"", path);
 }
 
@@ -220,6 +224,8 @@ void minizipNormalize(const char *srcFilename, const char *dstFilename) {
 
     std::stable_sort(files.begin(), files.end());
 
+    if (IfFileExists(tempFilename))
+        RemoveFile(tempFilename);
     ZipFileHolder zfOut(tempFilename.c_str());
     for (const FileLocation &f : files) {
         bool found = unzLocateFileAtBytes(zfIn, f.filename.c_str(), f.range[0], f.range[1]);

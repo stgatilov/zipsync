@@ -2,22 +2,63 @@
 #include "Utils.h"
 #include "StdString.h"
 #include "ZSAssert.h"
+#include "ZipUtils.h"
 
 
 namespace ZipSync {
 
-void WriteIniFile(const char *path, const IniData &data) {
-    StdioFileHolder f(path, "wb");
+void WriteIniFile(const char *path, const IniData &data, IniMode mode) {
+    ZipSyncAssertF(path[0], "Path to write INI file is empty");
+    std::string text;
     for (const auto &pNS : data) {
-        fprintf(f, "[%s]\n", pNS.first.c_str());
-        for (const auto &pKV : pNS.second)
-            fprintf(f, "%s=%s\n", pKV.first.c_str(), pKV.second.c_str());
-        fprintf(f, "\n");
+        char buffer[SIZE_LINEBUFFER];
+        sprintf(buffer, "[%s]\n", pNS.first.c_str());
+        text.append(buffer);
+        for (const auto &pKV : pNS.second) {
+            sprintf(buffer, "%s=%s\n", pKV.first.c_str(), pKV.second.c_str());
+            text.append(buffer);
+        }
+        text.append("\n");
+    }
+    if (mode == IniMode::Auto)
+        mode = (path[strlen(path)-1] == 'z' ? IniMode::Zipped : IniMode::Plain);
+    if (mode == IniMode::Zipped) {
+        ZipFileHolder zf(path);
+        zip_fileinfo info = {0};
+        info.dosDate = 0x28210000;  //1 January 2000 --- set it just to make date valid
+        SAFE_CALL(zipOpenNewFileInZip(zf, "data.ini", &info, NULL, 0, NULL, 0, NULL, Z_DEFLATED, Z_BEST_COMPRESSION));
+        int written = zipWriteInFileInZip(zf, text.data(), text.size());
+        ZipSyncAssert(written == text.size());
+        SAFE_CALL(zipCloseFileInZip(zf));
+    }
+    else {
+        StdioFileHolder f(path, "wb");
+        fwrite(text.data(), 1, text.size(), f);
     }
 }
-IniData ReadIniFile(const char *path) {
-    char buffer[SIZE_LINEBUFFER];
-    StdioFileHolder f(path, "rb");
+
+IniData ReadIniFile(const char *path, IniMode mode) {
+    std::vector<char> text;
+    if (mode == IniMode::Auto)
+        mode = (path[strlen(path)-1] == 'z' ? IniMode::Zipped : IniMode::Plain);
+    if (mode == IniMode::Zipped) {
+        UnzFileHolder zf(path);
+        SAFE_CALL(unzLocateFile(zf, "data.ini", true));
+        unz_file_info info;
+        SAFE_CALL(unzGetCurrentFileInfo(zf, &info, NULL, 0, NULL, 0, NULL, 0));
+        SAFE_CALL(unzOpenCurrentFile(zf));
+        text.resize(info.uncompressed_size);
+        int read = unzReadCurrentFile(zf, text.data(), text.size());
+        ZipSyncAssert(read == text.size());
+        SAFE_CALL(unzCloseCurrentFile(zf));
+    }
+    else {
+        StdioFileHolder f(path, "rb");
+        char buffer[SIZE_FILEBUFFER];
+        while (int bytes = fread(buffer, 1, SIZE_FILEBUFFER, f))
+            text.insert(text.end(), buffer, buffer+bytes);
+    }
+
     IniData ini;
     IniSect sec;
     std::string name;
@@ -27,8 +68,12 @@ IniData ReadIniFile(const char *path) {
         name.clear();
         sec.clear();
     };
-    while (fgets(buffer, sizeof(buffer), f.get())) {
-        std::string line = buffer;
+    size_t textPos = 0;
+    while (textPos < text.size()) {
+        size_t eolPos = std::find(text.begin() + textPos, text.end(), '\n') - text.begin();
+        std::string line(text.begin() + textPos, text.begin() + eolPos);
+        textPos = eolPos + 1;
+
         stdext::trim(line);
         if (line.empty())
             continue;

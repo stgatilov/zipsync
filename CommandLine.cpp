@@ -210,8 +210,8 @@ void CommandNormalize(args::Subparser &parser) {
 void CommandAnalyze(args::Subparser &parser) {
     args::ValueFlag<std::string> argRootDir(parser, "root", "Manifests would contain paths relative to this root directory\n"
         "(all relative paths are based from the root directory)", {'r', "root"}, args::Options::Required);
-    args::ValueFlag<std::string> argTargetMani(parser, "trgMani", "Path where Target manifest would be written", {'t', "target"}, "target.ini");
-    args::ValueFlag<std::string> argProvidedMani(parser, "provMani", "Path where Provided manifest would be written", {'p', "provided"}, "provided.ini");
+    args::ValueFlag<std::string> argTargetMani(parser, "trgMani", "Path where Target manifest would be written", {'t', "target"}, "target.iniz");
+    args::ValueFlag<std::string> argProvidedMani(parser, "provMani", "Path where Provided manifest would be written", {'p', "provided"}, "provided.iniz");
     args::Flag argNoTarget(parser, "notarget", "Do not generate Target manifest", {"no-target"});
     args::Flag argNoProvided(parser, "noprovided", "Do not generate Provided manifest", {"no-provided"});
     args::ValueFlag<int> argThreads(parser, "threads", "Use this number of parallel threads to accelerate analysis (0 = max)", {'j', "threads"}, 1);
