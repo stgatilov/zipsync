@@ -10,6 +10,9 @@ typedef void CURL;
 
 namespace ZipSync {
 
+/**
+ * A chunk of data which we want to download
+ */
 struct DownloadSource {
     //URL to download file from
     std::string url;
@@ -21,6 +24,10 @@ struct DownloadSource {
 typedef std::function<void(const void*, uint32_t)> DownloadFinishedCallback;
 typedef std::function<void(double, const char*)> GlobalProgressCallback;
 
+/**
+ * Smart downloader over HTTP protocol.
+ * Utilizes multipart byteranges requests to download many chunks quickly.
+ */
 class Downloader {
     struct Download {
         DownloadSource src;
