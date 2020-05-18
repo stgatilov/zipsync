@@ -177,8 +177,10 @@ void Manifest::ReadFromIni(const IniData &data, const std::string &rootDir) {
         ZipSyncAssertF(pos != std::string::npos, "Byterange %s has no hyphen", byterange.c_str());
         pf.byterange[0] = std::stoul(byterange.substr(0, pos));
         pf.byterange[1] = std::stoul(byterange.substr(pos+1));
-        ZipSyncAssert(pf.byterange[0] < pf.byterange[1]);
+        if (pf.byterange[0] || pf.byterange[1])
+            ZipSyncAssert(pf.byterange[0] < pf.byterange[1]);
         pf.package = dict.at("package");
+        pf.props.crc32 = std::stoul(dict.at("crc32"));
         pf.props.lastModTime = std::stoul(dict.at("lastModTime"));
         pf.props.compressionMethod = std::stoul(dict.at("compressionMethod"));
         pf.props.generalPurposeBitFlag = std::stoul(dict.at("gpbitFlag"));

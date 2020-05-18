@@ -86,9 +86,11 @@ template<class T> const T &Search(const std::vector<std::pair<std::string, T>> &
 }
 
 TEST_CASE("ProvidedManifest: Read/Write") {
-    ProvidedManifest mani;
+    Manifest mani;
 
-    ProvidedFile pf;
+    FileMetainfo pf;
+    memset(&pf.props, 0, sizeof(pf.props));
+    pf.location = FileLocation::Nowhere;
     pf.filename = "textures/model/darkmod/grass/grass01.jpg";
     pf.zipPath.rel = "subdir/win32/interesting_name456.pk4";
     pf.compressedHash = GenHash(1);
@@ -113,13 +115,13 @@ TEST_CASE("ProvidedManifest: Read/Write") {
 
     IniData savedIni = mani.WriteToIni();
 
-    ProvidedManifest restored;
+    Manifest restored;
     restored.ReadFromIni(savedIni, "nowhere");
 
     std::vector<int> order = {1, 0, 2};
     for (int i = 0; i < order.size(); i++) {
-        const ProvidedFile &src = mani[order[i]];
-        const ProvidedFile &dst = restored[i];
+        const FileMetainfo &src = mani[order[i]];
+        const FileMetainfo &dst = restored[i];
         CHECK(src.zipPath.rel == dst.zipPath.rel);
         CHECK(src.filename == dst.filename);
         CHECK(src.compressedHash == dst.compressedHash);
@@ -129,7 +131,7 @@ TEST_CASE("ProvidedManifest: Read/Write") {
     }
 
     for (int t = 0; t < 5; t++) {
-        ProvidedManifest newMani;
+        Manifest newMani;
         newMani.ReadFromIni(savedIni, "nowhere");
         IniData newIni = newMani.WriteToIni();
         CHECK(savedIni == newIni);
@@ -137,72 +139,74 @@ TEST_CASE("ProvidedManifest: Read/Write") {
 }
 
 TEST_CASE("TargetManifest: Read/Write") {
-    TargetManifest mani;
+    Manifest mani;
 
-    TargetFile tf;
+    FileMetainfo tf;
+    tf.byterange[0] = tf.byterange[1] = 0;
+    memset(&tf.props, 0, sizeof(tf.props));
     tf.package = "interesting";
     tf.zipPath.rel = "subdir/win32/interesting_name456.pk4";
     tf.compressedHash = GenHash(1);
     tf.contentsHash = GenHash(2);
     tf.filename = "textures/model/darkmod/grass/grass01.jpg";
-    tf.fhLastModTime = 1150921251;
-    tf.fhCompressionMethod = 8;
-    tf.fhGeneralPurposeBitFlag = 2;
-    tf.fhCompressedSize = 171234;
-    tf.fhContentsSize = 214567;
-    tf.fhInternalAttribs = 1234;
-    tf.fhExternalAttribs = 123454321;
+    tf.props.lastModTime = 1150921251;
+    tf.props.compressionMethod = 8;
+    tf.props.generalPurposeBitFlag = 2;
+    tf.props.compressedSize = 171234;
+    tf.props.contentsSize = 214567;
+    tf.props.internalAttribs = 1234;
+    tf.props.externalAttribs = 123454321;
     mani.AppendFile(tf);
     tf.package = "assets";
     tf.zipPath.rel = "basic_assets.pk4";
     tf.compressedHash = GenHash(5);
     tf.contentsHash = GenHash(6);
     tf.filename = "models/darkmod/guards/head.lwo";
-    tf.fhLastModTime = 100000000;
-    tf.fhCompressionMethod = 0;
-    tf.fhGeneralPurposeBitFlag = 0;
-    tf.fhCompressedSize = 4567891;
-    tf.fhContentsSize = 4567891;
-    tf.fhInternalAttribs = 0;
-    tf.fhExternalAttribs = 4000000000U;
+    tf.props.lastModTime = 100000000;
+    tf.props.compressionMethod = 0;
+    tf.props.generalPurposeBitFlag = 0;
+    tf.props.compressedSize = 4567891;
+    tf.props.contentsSize = 4567891;
+    tf.props.internalAttribs = 0;
+    tf.props.externalAttribs = 4000000000U;
     mani.AppendFile(tf);
     tf.package = "assets";
     tf.zipPath.rel = "subdir/win32/interesting_name456.pk4";
     tf.compressedHash = GenHash(3);
     tf.contentsHash = GenHash(4);
     tf.filename = "textures/model/standalone/menu.png";
-    tf.fhLastModTime = 4000000000U;
-    tf.fhCompressionMethod = 8;
-    tf.fhGeneralPurposeBitFlag = 6;
-    tf.fhCompressedSize = 12012;
-    tf.fhContentsSize = 12001;
-    tf.fhInternalAttribs = 7;
-    tf.fhExternalAttribs = 45;
+    tf.props.lastModTime = 4000000000U;
+    tf.props.compressionMethod = 8;
+    tf.props.generalPurposeBitFlag = 6;
+    tf.props.compressedSize = 12012;
+    tf.props.contentsSize = 12001;
+    tf.props.internalAttribs = 7;
+    tf.props.externalAttribs = 45;
     mani.AppendFile(tf);
 
     IniData savedIni = mani.WriteToIni();
 
-    TargetManifest restored;
+    Manifest restored;
     restored.ReadFromIni(savedIni, "nowhere");
 
-    std::vector<int> order = {1, 2, 0};
+    std::vector<int> order = {1, 0, 2};
     for (int i = 0; i < order.size(); i++) {
-        const TargetFile &src = mani[order[i]];
-        const TargetFile &dst = restored[i];
+        const FileMetainfo &src = mani[order[i]];
+        const FileMetainfo &dst = restored[i];
         CHECK(src.zipPath.rel == dst.zipPath.rel);
         CHECK(src.package == dst.package);
         CHECK(src.compressedHash == dst.compressedHash);
         CHECK(src.contentsHash == dst.contentsHash);
         CHECK(src.filename == dst.filename);
-        CHECK(src.fhLastModTime == dst.fhLastModTime);
-        CHECK(src.fhCompressionMethod == dst.fhCompressionMethod);
-        CHECK(src.fhGeneralPurposeBitFlag == dst.fhGeneralPurposeBitFlag);
-        CHECK(src.fhCompressedSize == dst.fhCompressedSize);
-        CHECK(src.fhContentsSize == dst.fhContentsSize);
+        CHECK(src.props.lastModTime == dst.props.lastModTime);
+        CHECK(src.props.compressionMethod == dst.props.compressionMethod);
+        CHECK(src.props.generalPurposeBitFlag == dst.props.generalPurposeBitFlag);
+        CHECK(src.props.compressedSize == dst.props.compressedSize);
+        CHECK(src.props.contentsSize == dst.props.contentsSize);
     }
 
     for (int t = 0; t < 5; t++) {
-        TargetManifest newMani;
+        Manifest newMani;
         newMani.ReadFromIni(savedIni, "nowhere");
         IniData newIni = newMani.WriteToIni();
         CHECK(savedIni == newIni);
@@ -262,8 +266,7 @@ string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
     zipClose(zf, NULL);
     #undef PACK_BUF
 
-    ProvidedManifest provided;
-    TargetManifest target;
+    Manifest mani;
     AppendManifestsFromLocalZip(
         zipPath1, rootDir,
         ProvidedLocation::Local, "default",
