@@ -12,29 +12,22 @@ void CreateManifests() {
     static const char *ROOT = R"(F:/thedarkmod_releases/differential)";
 
     int t_before = clock();
-    ProvidedManifest provMani;
-    TargetManifest targMani;
+    Manifest mani;
     AppendManifestsFromLocalZip(
         ZIP, ROOT,
-        ProvidedLocation::Local, "assets",
-        provMani, targMani
+        FileLocation::Local, "assets",
+        mani
     );
     int t_after = clock();
     printf("Elapsed time: %d ms", t_after - t_before);
 
-    auto data1 = provMani.WriteToIni();
-    WriteIniFile("prov.ini", data1);
-    auto data2 = targMani.WriteToIni();
-    WriteIniFile("targ.ini", data2);
+    auto data1 = mani.WriteToIni();
+    WriteIniFile("test.iniz", data1);
     
-    auto data3 = ReadIniFile("prov.ini");
+    auto data3 = ReadIniFile("test.iniz");
     assert(data3 == data1);
-    ProvidedManifest provMani2;
-    provMani2.ReadFromIni(data3, ROOT);
-    auto data4 = ReadIniFile("targ.ini");
-    assert(data4 == data2);
-    TargetManifest targMani2;
-    targMani2.ReadFromIni(data4, ROOT);
+    Manifest mani2;
+    mani2.ReadFromIni(data3, ROOT);
 }
 
 void OneZipLocalUpdate() {
@@ -44,25 +37,25 @@ void OneZipLocalUpdate() {
     //static const char *ZIP_206TO207 = R"(F:/thedarkmod_releases/differential/tdm_update_2.06_to_2.07.zip)";
     static const char *ZIP_206TO207 = R"(http://tdmcdn.azureedge.net/test/tdm_update_2.06_to_2.07.zip)";
 
-    ProvidedManifest provMani;
-    provMani.AppendLocalZip(ZIP_REL206, stdext::path(ZIP_REL206).parent_path().string());
+    Manifest provMani;
+    provMani.AppendLocalZip(ZIP_REL206, stdext::path(ZIP_REL206).parent_path().string(), "");
     //provMani.AppendLocalZip(ZIP_206TO207, stdext::path(ZIP_206TO207).parent_path().string());
-    ProvidedManifest remoteMani;
+    Manifest remoteMani;
     remoteMani.ReadFromIni(ReadIniFile(R"(F:\thedarkmod_releases\differential\prov.ini)"), "http://tdmcdn.azureedge.net/test");
     provMani.AppendManifest(remoteMani);
-    TargetManifest targMani;
+    Manifest targMani;
     targMani.AppendLocalZip(ZIP_REL207, stdext::path(ZIP_REL207).parent_path().string(), "");
 
     stdext::create_directories(stdext::path(ROOT));
     UpdateProcess update;
-    update.Init(TargetManifest(targMani), ProvidedManifest(provMani), ROOT);
+    update.Init(targMani, provMani, ROOT);
     update.DevelopPlan(UpdateType::SameContents);
     update.DownloadRemoteFiles();
     update.RepackZips();
 }
 
 int main() {
-    //CreateManifests();
-    OneZipLocalUpdate();
+    CreateManifests();
+    //OneZipLocalUpdate();
     return 0;
 }
