@@ -421,8 +421,7 @@ TEST_CASE("BadZips") {
     #undef TEST_END
 
     for (int i = 0; i < testsCount; i++) {
-        CHECK_THROWS(ProvidedManifest().AppendLocalZip(zipPath[i], rootDir));
-        CHECK_THROWS(TargetManifest().AppendLocalZip(zipPath[i], rootDir, "?"));
+        CHECK_THROWS(Manifest().AppendLocalZip(zipPath[i], rootDir, ""));
     }
 }
 
