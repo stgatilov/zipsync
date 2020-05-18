@@ -11,58 +11,10 @@
 namespace ZipSync {
 
 /**
- * A type of location of a provided file.
+ * Information about file properties inside zip.
+ * Enough to exactly reproduce the zip file header.
  */
-enum class ProvidedLocation {
-    Inplace = 0,    //local zip file in the place where it should be
-    Local = 1,      //local zip file (e.g. inside local cache of old versions)
-    RemoteHttp = 2, //file remotely available via HTTP 1.1+
-
-    Nowhere,        //(should never be used)
-
-    Repacked,       //internal: file is on its place in "repacked" zip (not yet renamed back)
-    Reduced,        //internal: file is in "reduced" zip, to be moved to cache later
-};
-
-/**
- * Metainformation about a provided file.
- * All of this can be quickly deduced from "provided manifest"
- * without having to download the actual provided files.
- */
-struct ProvidedFile {
-    //file/url path to the zip archive containing the file
-    PathAR zipPath;
-    //filename inside zip (for ordering/debugging)
-    std::string filename;
-    //type of file: local/remote
-    ProvidedLocation location;
-    //range of bytes in the zip representing the file
-    //note: local file header INcluded
-    uint32_t byterange[2];
-
-    //hash of the contents of uncompressed file
-    HashDigest contentsHash;
-    //hash of the compressed file
-    //note: local file header EXcluded
-    HashDigest compressedHash;
-
-    static bool IsLess_ByZip(const ProvidedFile &a, const ProvidedFile &b);
-    void Nullify();
-};
-
-/**
- * Metainformation about a file which must be present according to selected target package.
- * All this information must be prepared in packaging process and saved into "target manifest".
- */
-struct TargetFile {
-    //path to the zip archive (i.e. where it must be)
-    PathAR zipPath;
-    //filename inside zip (stored in file header too)
-    std::string filename;
-    //name of the target package it belongs to
-    //"target package" = a set of files which must be installed (several packages may be chosen)
-    std::string package;
-
+struct FileZipProps {
     //(contents of zip file central header follows)
     //  version made by                 2 bytes  (minizip: 0)
     //  version needed to extract       2 bytes  (minizip: 20 --- NO zip64!)
@@ -85,22 +37,62 @@ struct TargetFile {
     //  file comment (variable size)    ***      (minizip: empty)
 
     //last modification time in DOS format
-    uint32_t fhLastModTime;
+    uint32_t lastModTime;
     //compression method
-    uint16_t fhCompressionMethod;
+    uint16_t compressionMethod;
     //compression settings for DEFLATE algorithm
-    uint16_t fhGeneralPurposeBitFlag;
+    uint16_t generalPurposeBitFlag;
     //internal attributes
-    uint16_t fhInternalAttribs;
+    uint16_t internalAttribs;
     //external attributes
-    uint32_t fhExternalAttribs;
+    uint32_t externalAttribs;
     //size of compressed file (excessive)
     //note: local file header EXcluded
-    uint32_t fhCompressedSize;
+    uint32_t compressedSize;
     //size of uncompressed file (needed when writing in RAW mode)
-    uint32_t fhContentsSize;
+    uint32_t contentsSize;
     //CRC32 checksum of uncompressed file (needed when writing in RAW mode)
-    uint32_t fhCrc32;
+    uint32_t crc32;
+};
+
+/**
+ * Where is the file described by metainfo located.
+ */
+enum class FileLocation {
+    Inplace = 0,    //local zip file in the place where it should be
+    Local = 1,      //local zip file (e.g. inside local cache of old versions)
+    RemoteHttp = 2, //file remotely available via HTTP 1.1+
+    Nowhere,        //file data is not available
+    Repacked,       //internal: file is on its place in "repacked" zip (not yet renamed back)
+    Reduced,        //internal: file is in "reduced" zip, to be moved to cache later
+};
+
+/**
+ * Metainformation about a file, which is manipulated by updater.
+ * It serves two purposes:
+ *   1. in target manifest: describes a file which must be present according to selected target package after update
+ *   2. in provided manifest: describes a file provided at some location, available for reading/downloading
+ */
+struct FileMetainfo {
+    //file/url path to the zip archive
+    PathAR zipPath;
+    //filename inside zip
+    std::string filename;
+
+    //in target manifest: Nowhere
+    //in provided manifest: Local/RemoteHttp
+    //the update algorithm uses other values
+    FileLocation location;
+    //range of bytes in the zip representing the file
+    //makes sense only if the file is actually provided
+    //note: local file header INcluded
+    uint32_t byterange[2];
+
+    //name of the target package it belongs to
+    //"target package" = a set of files which must be installed (several packages may be chosen)
+    std::string package;
+    //what should be written to the file header in zip
+    FileZipProps props;
 
     //hash of the contents of uncompressed file
     HashDigest contentsHash;
@@ -108,63 +100,38 @@ struct TargetFile {
     //note: local file header EXcluded
     HashDigest compressedHash;
 
-    static bool IsLess_ByZip(const TargetFile &a, const TargetFile &b);
+    static bool IsLess_ByZip(const FileMetainfo &a, const FileMetainfo &b);
+    void Nullify();
 };
 
 /**
- * "Provided manifest" describes a set of files available.
- * The sync algorithm can soak any number of provided manifests.
- * Update is possible if all of them together cover the requirements of the selected target packages.
- * Example: we can create a provided manifest for a TDM's "differential update package".
+ * Manifest describes a set of files, and stores metainfo for each of these files.
+ * For update, one manifest is chosen as "target" (desired result), and several manifests "provide" files for copy/download.
+ * Update is possible if provided manifests together cover the requirements of the target manifest.
+ * While single manifest file can represent both target set and provided set, they are always split before update.
  */
-class ProvidedManifest {
+class Manifest {
     //arbitrary text attached to the manifest (only for debugging)
     std::string _comment;
 
-    //the set of files declared available by this manifest
-    std::vector<ProvidedFile> _files;
+    //if set to false, then update to this state makes no sense
+    bool _canBeTarget = true;
+
+    //the set of files described by this manifest
+    std::vector<FileMetainfo> _files;
 
 public:
     const std::string &GetComment() const { return _comment; }
     void SetComment(const std::string &text) { _comment = text; }
 
     int size() const { return _files.size(); }
-    const ProvidedFile &operator[](int index) const { return _files[index]; }
-    ProvidedFile &operator[](int index) { return _files[index]; }
+    const FileMetainfo &operator[](int index) const { return _files[index]; }
+    FileMetainfo &operator[](int index) { return _files[index]; }
 
     void Clear() { _files.clear(); }
-    void AppendFile(const ProvidedFile &file) { _files.push_back(file); }
-    void AppendManifest(const ProvidedManifest &other);
-    void AppendLocalZip(const std::string &zipPath, const std::string &rootDir);
-
-    void ReadFromIni(const IniData &data, const std::string &rootDir);
-    IniData WriteToIni() const;
-};
-
-/**
- * "Target manifest" describes one or several target packages.
- * Examples:
- *   TDM 2.06 has single target manifest file (describes assets/exe packages)
- *   user selects the set of packages to install --- it may be considered a target manifest too
- */
-class TargetManifest {
-    //arbitrary text attached to the manifest (only for debugging)
-    std::string _comment;
-    //set of files described in the manifest
-    std::vector<TargetFile> _files;
-
-public:
-    const std::string &GetComment() const { return _comment; }
-    void SetComment(const std::string &text) { _comment = text; }
-
-    int size() const { return _files.size(); }
-    const TargetFile &operator[](int index) const { return _files[index]; }
-    TargetFile &operator[](int index) { return _files[index]; }
-
-    void Clear() { _files.clear(); }
-    void AppendFile(const TargetFile &file) { _files.push_back(file); }
+    void AppendFile(const FileMetainfo &file) { _files.push_back(file); }
+    void AppendManifest(const Manifest &other);
     void AppendLocalZip(const std::string &zipPath, const std::string &rootDir, const std::string &packageName);
-    void AppendManifest(const TargetManifest &other);
 
     void ReadFromIni(const IniData &data, const std::string &rootDir);
     IniData WriteToIni() const;
@@ -176,13 +143,13 @@ public:
  * Iterator to a file in a manifest.
  * Appends do NOT invalidate it.
  */
-template<class File, class Manifest> struct IndexIterator {
+struct ManifestIter {
     Manifest *_manifest;
     int _index;
 
-    IndexIterator() : _manifest(nullptr), _index(0) {}
-    IndexIterator(Manifest &manifest, int index) : _manifest(&manifest), _index(index) {}
-    IndexIterator(Manifest &manifest, const File *file) {
+    ManifestIter() : _manifest(nullptr), _index(0) {}
+    ManifestIter(Manifest &manifest, int index) : _manifest(&manifest), _index(index) {}
+    ManifestIter(Manifest &manifest, const FileMetainfo *file) {
         if (file) {
             _manifest = &manifest;
             _index = file - &manifest[0];
@@ -193,29 +160,27 @@ template<class File, class Manifest> struct IndexIterator {
             _index = 0;
         }
     }
-    File& operator*() const { return (*_manifest)[_index]; }
-    File* operator->() const { return &(*_manifest)[_index]; }
+    FileMetainfo& operator*() const { return (*_manifest)[_index]; }
+    FileMetainfo* operator->() const { return &(*_manifest)[_index]; }
     explicit operator bool() const { return _manifest != nullptr; }
-    File *get () const { return &(*_manifest)[_index]; }
+    FileMetainfo *get () const { return &(*_manifest)[_index]; }
 };
-typedef IndexIterator<TargetFile, TargetManifest> TargetIter;
-typedef IndexIterator<ProvidedFile, ProvidedManifest> ProvidedIter;
 
 
 //sets all properties except for:
-//  PT: "zipPath"
-//  P: "location"
-//  T: "package"
-//  PT: "contentsHash" (if hashContents = false)
-//  PT: "compressedHash" (if hashCompressed = false)
-void AnalyzeCurrentFile(unzFile zf, ProvidedFile &provided, TargetFile &target, bool hashContents = true, bool hashCompressed = true);
+//  zipPath
+//  location
+//  package
+//  contentsHash (if hashContents = false)
+//  compressedHash (if hashCompressed = false)
+void AnalyzeCurrentFile(unzFile zf, FileMetainfo &target, bool hashContents = true, bool hashCompressed = true);
 
-//creates both types of manifest at once (2x faster than creating them separately)
+//creates manifest for local zip, serving both as target and provided
 void AppendManifestsFromLocalZip(
     const std::string &zipPath, const std::string &rootDir,             //path to local zip (both absolute?)
-    ProvidedLocation location,                                          //for provided manifest
-    const std::string &packageName,                                     //for target manifest
-    ProvidedManifest &providMani, TargetManifest &targetMani            //outputs
+    FileLocation location,                                              //for provided
+    const std::string &packageName,                                     //for target
+    Manifest &mani                                                      //output
 );
 
 }

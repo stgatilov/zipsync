@@ -12,22 +12,20 @@
 
 namespace ZipSync {
 
-bool ProvidedFile::IsLess_ByZip(const ProvidedFile &a, const ProvidedFile &b) {
+bool FileMetainfo::IsLess_ByZip(const FileMetainfo &a, const FileMetainfo &b) {
     return std::tie(a.zipPath.rel, a.filename, a.contentsHash) < std::tie(b.zipPath.rel, b.filename, b.contentsHash);
 }
-bool TargetFile::IsLess_ByZip(const TargetFile &a, const TargetFile &b) {
-    return std::tie(a.zipPath.rel, a.package, a.filename, a.contentsHash) < std::tie(b.zipPath.rel, b.package, b.filename, b.contentsHash);
-}
 
-void ProvidedFile::Nullify() {
+void FileMetainfo::Nullify() {
     compressedHash.Clear();
     contentsHash.Clear();
     byterange[0] = byterange[1] = 0;
-    location = ProvidedLocation::Nowhere;
+    location = FileLocation::Nowhere;
+    memset(&props, 0, sizeof(props));
 }
 
 
-void AnalyzeCurrentFile(unzFile zf, ProvidedFile &provided, TargetFile &target, bool hashContents, bool hashCompressed) {
+void AnalyzeCurrentFile(unzFile zf, FileMetainfo &filemeta, bool hashContents, bool hashCompressed) {
     char filename[SIZE_PATH];
     unz_file_info info;
     SAFE_CALL(unzGetCurrentFileInfo(zf, &info, filename, sizeof(filename), NULL, 0, NULL, 0));
@@ -43,16 +41,16 @@ void AnalyzeCurrentFile(unzFile zf, ProvidedFile &provided, TargetFile &target, 
     ZipSyncAssertF(info.disk_num_start == 0, "File %s has disk nonzero number (not supported)", filename);
     //TODO: check that extra field is empty in local file header?...
 
-    target.filename = provided.filename = filename;
-    target.fhCrc32 = info.crc;
-    target.fhCompressedSize = info.compressed_size;
-    target.fhContentsSize = info.uncompressed_size;
-    target.fhCompressionMethod = info.compression_method;
-    target.fhGeneralPurposeBitFlag = info.flag;
-    target.fhLastModTime = info.dosDate;
-    target.fhInternalAttribs = info.internal_fa;
-    target.fhExternalAttribs = info.external_fa;
-    unzGetCurrentFilePosition(zf, &provided.byterange[0], NULL, &provided.byterange[1]);
+    filemeta.filename = filename;
+    filemeta.props.crc32 = info.crc;
+    filemeta.props.compressedSize = info.compressed_size;
+    filemeta.props.contentsSize = info.uncompressed_size;
+    filemeta.props.compressionMethod = info.compression_method;
+    filemeta.props.generalPurposeBitFlag = info.flag;
+    filemeta.props.lastModTime = info.dosDate;
+    filemeta.props.internalAttribs = info.internal_fa;
+    filemeta.props.externalAttribs = info.external_fa;
+    unzGetCurrentFilePosition(zf, &filemeta.byterange[0], NULL, &filemeta.byterange[1]);
 
     for (int mode = 0; mode < 2; mode++) {
         if (!(mode == 0 ? hashCompressed : hashContents))
@@ -76,21 +74,21 @@ void AnalyzeCurrentFile(unzFile zf, ProvidedFile &provided, TargetFile &target, 
         SAFE_CALL(unzCloseCurrentFile(zf));
 
         if (mode == 0) {
-            ZipSyncAssertF(processedBytes == target.fhCompressedSize, "File %s has wrong compressed size: %d instead of %d", filename, target.fhCompressedSize, processedBytes);
-            target.compressedHash = provided.compressedHash = cmpHash;
+            ZipSyncAssertF(processedBytes == filemeta.props.compressedSize, "File %s has wrong compressed size: %d instead of %d", filename, filemeta.props.compressedSize, processedBytes);
+            filemeta.compressedHash = cmpHash;
         }
         else {
-            ZipSyncAssertF(processedBytes == target.fhContentsSize, "File %s has wrong uncompressed size: %d instead of %d", filename, target.fhContentsSize, processedBytes);
-            target.contentsHash = provided.contentsHash = cmpHash;
+            ZipSyncAssertF(processedBytes == filemeta.props.contentsSize, "File %s has wrong uncompressed size: %d instead of %d", filename, filemeta.props.contentsSize, processedBytes);
+            filemeta.contentsHash = cmpHash;
         }
     }
 }
 
 void AppendManifestsFromLocalZip(
     const std::string &zipPathAbs, const std::string &rootDir,
-    ProvidedLocation location,
+    FileLocation location,
     const std::string &packageName,
-    ProvidedManifest &providMani, TargetManifest &targetMani
+    Manifest &mani
 ) {
     PathAR zipPath = PathAR::FromAbs(zipPathAbs, rootDir);
 
@@ -98,16 +96,14 @@ void AppendManifestsFromLocalZip(
     ZipSyncAssertF(!unzIsZip64(zf), "Zip64 is not supported!");
     SAFE_CALL(unzGoToFirstFile(zf));
     while (1) {
-        ProvidedFile pf;
-        TargetFile tf;
-        pf.zipPath = tf.zipPath = zipPath;
-        pf.location = location;
-        tf.package = packageName;
+        FileMetainfo filemeta;
+        filemeta.zipPath = zipPath;
+        filemeta.location = location;
+        filemeta.package = packageName;
 
-        AnalyzeCurrentFile(zf, pf, tf);
+        AnalyzeCurrentFile(zf, filemeta);
 
-        providMani.AppendFile(pf);
-        targetMani.AppendFile(tf);
+        mani.AppendFile(filemeta);
 
         int err = unzGoToNextFile(zf);
         if (err == UNZ_END_OF_LIST_OF_FILE)
@@ -116,38 +112,40 @@ void AppendManifestsFromLocalZip(
     }
     zf.reset();
 }
-void ProvidedManifest::AppendLocalZip(const std::string &zipPath, const std::string &rootDir) {
-    TargetManifest temp;
-    ProvidedLocation location = (PathAR::IsHttp(rootDir) ? ProvidedLocation::RemoteHttp : ProvidedLocation::Local);
-    AppendManifestsFromLocalZip(zipPath, rootDir, location, "", *this, temp);
-}
-void TargetManifest::AppendLocalZip(const std::string &zipPath, const std::string &rootDir, const std::string &packageName) {
-    ProvidedManifest temp;
-    AppendManifestsFromLocalZip(zipPath, rootDir, ProvidedLocation::Inplace, packageName, temp, *this);
+void Manifest::AppendLocalZip(const std::string &zipPath, const std::string &rootDir, const std::string &packageName) {
+    ZipSyncAssert(PathAR::IsHttp(rootDir) == false);
+    AppendManifestsFromLocalZip(zipPath, rootDir, FileLocation::Local, packageName, *this);
 }
 
-void TargetManifest::AppendManifest(const TargetManifest &other) {
+void Manifest::AppendManifest(const Manifest &other) {
     AppendVector(_files, other._files);
-}
-void ProvidedManifest::AppendManifest(const ProvidedManifest &other) {
-    AppendVector(_files, other._files);
+    _canBeTarget = _canBeTarget || other._canBeTarget;
 }
 
-IniData ProvidedManifest::WriteToIni() const {
+IniData Manifest::WriteToIni() const {
     //sort files by INI order
-    std::vector<const ProvidedFile*> order;
+    std::vector<const FileMetainfo*> order;
     for (const auto &f : _files)
         order.push_back(&f);
     std::sort(order.begin(), order.end(), [](auto a, auto b) {
-        return ProvidedFile::IsLess_ByZip(*a, *b);
+        return FileMetainfo::IsLess_ByZip(*a, *b);
     });
 
     IniData ini;
-    for (const ProvidedFile *pf : order) {
+    for (const FileMetainfo *pf : order) {
         IniSect section;
         section.push_back(std::make_pair("contentsHash", pf->contentsHash.Hex()));
         section.push_back(std::make_pair("compressedHash", pf->compressedHash.Hex()));
         section.push_back(std::make_pair("byterange", std::to_string(pf->byterange[0]) + "-" + std::to_string(pf->byterange[1])));
+        section.push_back(std::make_pair("package", pf->package));
+        section.push_back(std::make_pair("crc32", std::to_string(pf->props.crc32)));
+        section.push_back(std::make_pair("lastModTime", std::to_string(pf->props.lastModTime)));
+        section.push_back(std::make_pair("compressionMethod", std::to_string(pf->props.compressionMethod)));
+        section.push_back(std::make_pair("gpbitFlag", std::to_string(pf->props.generalPurposeBitFlag)));
+        section.push_back(std::make_pair("compressedSize", std::to_string(pf->props.compressedSize)));
+        section.push_back(std::make_pair("contentsSize", std::to_string(pf->props.contentsSize)));
+        section.push_back(std::make_pair("internalAttribs", std::to_string(pf->props.internalAttribs)));
+        section.push_back(std::make_pair("externalAttribs", std::to_string(pf->props.externalAttribs)));
 
         std::string secName = "File " + GetFullPath(pf->zipPath.rel, pf->filename);
         ini.push_back(std::make_pair(secName, std::move(section)));
@@ -155,12 +153,12 @@ IniData ProvidedManifest::WriteToIni() const {
 
     return ini;
 }
-void ProvidedManifest::ReadFromIni(const IniData &data, const std::string &rootDir) {
-    ProvidedLocation location = (PathAR::IsHttp(rootDir) ? ProvidedLocation::RemoteHttp : ProvidedLocation::Local);
+void Manifest::ReadFromIni(const IniData &data, const std::string &rootDir) {
+    ZipSyncAssert(PathAR::IsHttp(rootDir) == false);
 
     for (const auto &pNS : data) {
-        ProvidedFile pf;
-        pf.location = location;
+        FileMetainfo pf;
+        pf.location = FileLocation::Local;
 
         std::string name = pNS.first;
         if (!stdext::starts_with(name, "File "))
@@ -180,73 +178,22 @@ void ProvidedManifest::ReadFromIni(const IniData &data, const std::string &rootD
         pf.byterange[0] = std::stoul(byterange.substr(0, pos));
         pf.byterange[1] = std::stoul(byterange.substr(pos+1));
         ZipSyncAssert(pf.byterange[0] < pf.byterange[1]);
+        pf.package = dict.at("package");
+        pf.props.lastModTime = std::stoul(dict.at("lastModTime"));
+        pf.props.compressionMethod = std::stoul(dict.at("compressionMethod"));
+        pf.props.generalPurposeBitFlag = std::stoul(dict.at("gpbitFlag"));
+        pf.props.compressedSize = std::stoul(dict.at("compressedSize"));
+        pf.props.contentsSize = std::stoul(dict.at("contentsSize"));
+        pf.props.internalAttribs = std::stoul(dict.at("internalAttribs"));
+        pf.props.externalAttribs = std::stoul(dict.at("externalAttribs"));
 
         AppendFile(pf);
     }
 }
 
-IniData TargetManifest::WriteToIni() const {
-    //sort files by INI order
-    std::vector<const TargetFile*> order;
-    for (const auto &f : _files)
-        order.push_back(&f);
-    std::sort(order.begin(), order.end(), [](auto a, auto b) {
-        return TargetFile::IsLess_ByZip(*a, *b);
-    });
-
-    IniData ini;
-    for (const TargetFile *tf : order) {
-        IniSect section;
-        section.push_back(std::make_pair("package", tf->package));
-        section.push_back(std::make_pair("contentsHash", tf->contentsHash.Hex()));
-        section.push_back(std::make_pair("compressedHash", tf->compressedHash.Hex()));
-        section.push_back(std::make_pair("crc32", std::to_string(tf->fhCrc32)));
-        section.push_back(std::make_pair("lastModTime", std::to_string(tf->fhLastModTime)));
-        section.push_back(std::make_pair("compressionMethod", std::to_string(tf->fhCompressionMethod)));
-        section.push_back(std::make_pair("gpbitFlag", std::to_string(tf->fhGeneralPurposeBitFlag)));
-        section.push_back(std::make_pair("compressedSize", std::to_string(tf->fhCompressedSize)));
-        section.push_back(std::make_pair("contentsSize", std::to_string(tf->fhContentsSize)));
-        section.push_back(std::make_pair("internalAttribs", std::to_string(tf->fhInternalAttribs)));
-        section.push_back(std::make_pair("externalAttribs", std::to_string(tf->fhExternalAttribs)));
-
-        std::string secName = "File " + GetFullPath(tf->zipPath.rel, tf->filename);
-        ini.push_back(std::make_pair(secName, std::move(section)));
-    }
-
-    return ini;
-}
-void TargetManifest::ReadFromIni(const IniData &data, const std::string &rootDir) {
-    for (const auto &pNS : data) {
-        TargetFile tf;
-
-        std::string name = pNS.first;
-        if (!stdext::starts_with(name, "File "))
-            continue;
-        name = name.substr(5);
-
-        ParseFullPath(name, tf.zipPath.rel, tf.filename);
-        tf.zipPath = PathAR::FromRel(tf.zipPath.rel, rootDir);
-
-        std::map<std::string, std::string> dict(pNS.second.begin(), pNS.second.end());
-        tf.package = dict.at("package");
-        tf.contentsHash.Parse(dict.at("contentsHash").c_str());
-        tf.compressedHash.Parse(dict.at("compressedHash").c_str());
-
-        tf.fhLastModTime = std::stoul(dict.at("lastModTime"));
-        tf.fhCompressionMethod = std::stoul(dict.at("compressionMethod"));
-        tf.fhGeneralPurposeBitFlag = std::stoul(dict.at("gpbitFlag"));
-        tf.fhCompressedSize = std::stoul(dict.at("compressedSize"));
-        tf.fhContentsSize = std::stoul(dict.at("contentsSize"));
-        tf.fhInternalAttribs = std::stoul(dict.at("internalAttribs"));
-        tf.fhExternalAttribs = std::stoul(dict.at("externalAttribs"));
-
-        AppendFile(tf);
-    }
-}
-
-void TargetManifest::ReRoot(const std::string &rootDir) {
-    for (TargetFile &tf : _files) {
-        tf.zipPath = PathAR::FromRel(tf.zipPath.rel, rootDir);
+void Manifest::ReRoot(const std::string &rootDir) {
+    for (FileMetainfo &filemeta : _files) {
+        filemeta.zipPath = PathAR::FromRel(filemeta.zipPath.rel, rootDir);
     }
 }
 

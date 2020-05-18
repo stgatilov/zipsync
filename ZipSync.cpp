@@ -11,9 +11,9 @@
 
 namespace ZipSync {
 
-void UpdateProcess::Init(TargetManifest &&targetMani_, ProvidedManifest &&providedMani_, const std::string &rootDir_) {
-    _targetMani = std::move(targetMani_);
-    _providedMani = std::move(providedMani_);
+void UpdateProcess::Init(const Manifest &targetMani_, const Manifest &providedMani_, const std::string &rootDir_) {
+    _targetMani = targetMani_;
+    _providedMani = providedMani_;
     _rootDir = rootDir_;
 
     _targetMani.ReRoot(_rootDir);
@@ -36,9 +36,9 @@ bool UpdateProcess::DevelopPlan(UpdateType type) {
     _updateType = type;
 
     //build index of target files: by zip path + file path inside zip
-    std::map<std::string, const TargetFile*> pathToTarget;
+    std::map<std::string, const FileMetainfo*> pathToTarget;
     for (int i = 0; i < _targetMani.size(); i++) {
-        const TargetFile &tf = _targetMani[i];
+        const FileMetainfo &tf = _targetMani[i];
         std::string fullPath = GetFullPath(tf.zipPath.abs, tf.filename);
         auto pib = pathToTarget.insert(std::make_pair(fullPath, &tf));
         ZipSyncAssertF(pib.second, "Duplicate target file at place %s", fullPath.c_str());
@@ -46,21 +46,21 @@ bool UpdateProcess::DevelopPlan(UpdateType type) {
 
     //find provided files which are already in-place
     for (int i = 0; i < _providedMani.size(); i++) {
-        ProvidedFile &pf = _providedMani[i];
-        if (pf.location != ProvidedLocation::Local)
+        FileMetainfo &pf = _providedMani[i];
+        if (pf.location != FileLocation::Local)
             continue;
         std::string fullPath = GetFullPath(pf.zipPath.abs, pf.filename);
         auto iter = pathToTarget.find(fullPath);
         if (iter != pathToTarget.end()) {
             //give this provided file priority when choosing where to take file from
-            pf.location = ProvidedLocation::Inplace;
+            pf.location = FileLocation::Inplace;
         }
     }
 
     //build index of provided files (by hash on uncompressed file)
-    std::map<HashDigest, std::vector<const ProvidedFile*>> pfIndex;
+    std::map<HashDigest, std::vector<const FileMetainfo*>> pfIndex;
     for (int i = 0; i < _providedMani.size(); i++) {
-        const ProvidedFile &pf = _providedMani[i];
+        const FileMetainfo &pf = _providedMani[i];
         pfIndex[pf.contentsHash].push_back(&pf);
     }
 
@@ -68,16 +68,16 @@ bool UpdateProcess::DevelopPlan(UpdateType type) {
     _matches.clear();
     bool fullPlan = true;
     for (int i = 0; i < _targetMani.size(); i++) {
-        const TargetFile &tf = _targetMani[i];
+        const FileMetainfo &tf = _targetMani[i];
 
-        const ProvidedFile *bestFile = nullptr;
+        const FileMetainfo *bestFile = nullptr;
         int bestScore = 1000000000;
 
         auto iter = pfIndex.find(tf.contentsHash);
         if (iter != pfIndex.end()) {
-            const std::vector<const ProvidedFile*> &candidates = iter->second;
+            const std::vector<const FileMetainfo*> &candidates = iter->second;
 
-            for (const ProvidedFile *pf : candidates) {
+            for (const FileMetainfo *pf : candidates) {
                 if (_updateType == UpdateType::SameCompressed && !(pf->compressedHash == tf.compressedHash))
                     continue;
                 int score = int(pf->location);
@@ -87,7 +87,7 @@ bool UpdateProcess::DevelopPlan(UpdateType type) {
                 }
             }
         }
-        _matches.push_back(Match{TargetIter(_targetMani, &tf), ProvidedIter(_providedMani, bestFile)});
+        _matches.push_back(Match{ManifestIter(_targetMani, &tf), ManifestIter(_providedMani, bestFile)});
         if (!bestFile)
             fullPlan = false;
     }
@@ -106,8 +106,8 @@ public:
         std::string _zipPath;
         bool _managed = false;
 
-        std::vector<TargetIter> _target;
-        std::vector<ProvidedIter> _provided;
+        std::vector<ManifestIter> _target;
+        std::vector<ManifestIter> _provided;
         std::vector<int> _matchIds;
 
         std::string _zipPathRepacked;
@@ -137,9 +137,9 @@ public:
     std::map<HashDigest, int> _hashProvidedCnt;
 
     //the manifest containing provided files created by repacking process
-    ProvidedManifest _repackedMani;
+    Manifest _repackedMani;
     //the manifest containing no-longer-needed files from target zips
-    ProvidedManifest _reducedMani;
+    Manifest _reducedMani;
 
 
     Repacker(UpdateProcess &owner) : _owner(owner) {}
@@ -150,7 +150,7 @@ public:
         for (Match m : _owner._matches) {
             std::string fullPath = GetFullPath(m.target->zipPath.abs, m.target->filename);
             ZipSyncAssertF(m.provided, "RepackZips: target file %s is not provided", fullPath.c_str());
-            ZipSyncAssertF(m.provided->location == ProvidedLocation::Inplace || m.provided->location == ProvidedLocation::Local, "RepackZips: target file %s is not available locally", fullPath.c_str());
+            ZipSyncAssertF(m.provided->location == FileLocation::Inplace || m.provided->location == FileLocation::Local, "RepackZips: target file %s is not available locally", fullPath.c_str());
             ZipSyncAssert(_owner._managedZips.count(m.target->zipPath.abs));
         }
     }
@@ -159,8 +159,8 @@ public:
         //create ZipInfo structure for every zip involved
         std::set<std::string> zipPaths = _owner._managedZips;
         for (int i = 0; i < _owner._providedMani.size(); i++) {
-            const ProvidedFile &pf = _owner._providedMani[i];
-            if (pf.location == ProvidedLocation::Inplace || pf.location == ProvidedLocation::Local) {
+            const FileMetainfo &pf = _owner._providedMani[i];
+            if (pf.location == FileLocation::Inplace || pf.location == FileLocation::Local) {
                 _hashProvidedCnt[pf.compressedHash]++;
                 zipPaths.insert(pf.zipPath.abs);
             }
@@ -177,14 +177,14 @@ public:
         for (const std::string &zipPath : _owner._managedZips)
             FindZip(zipPath)._managed = true;
         for (int i = 0; i < _owner._targetMani.size(); i++) {
-            const TargetFile &tf = _owner._targetMani[i];
-            FindZip(tf.zipPath.abs)._target.push_back(TargetIter(_owner._targetMani, i));
+            const FileMetainfo &tf = _owner._targetMani[i];
+            FindZip(tf.zipPath.abs)._target.push_back(ManifestIter(_owner._targetMani, i));
         }
         for (int i = 0; i < _owner._providedMani.size(); i++) {
-            const ProvidedFile &pf = _owner._providedMani[i];
-            if (pf.location == ProvidedLocation::RemoteHttp)
+            const FileMetainfo &pf = _owner._providedMani[i];
+            if (pf.location == FileLocation::RemoteHttp)
                 continue;
-            FindZip(pf.zipPath.abs)._provided.push_back(ProvidedIter(_owner._providedMani, i));
+            FindZip(pf.zipPath.abs)._provided.push_back(ManifestIter(_owner._providedMani, i));
         }
         for (int i = 0; i < _owner._matches.size(); i++) {
             const Match &m = _owner._matches[i];
@@ -209,7 +209,7 @@ public:
                 continue;       //number of files is different
 
             //check that "match" mapping maps into source zip and is surjective
-            std::set<const ProvidedFile *> providedSet;
+            std::set<const FileMetainfo *> providedSet;
             for (int midx : dstZip._matchIds) {
                 Match m = _owner._matches[midx];
                 if (m.provided->zipPath.abs != srcZip._zipPath)
@@ -224,8 +224,8 @@ public:
             if (srcZip._usedCnt != k)
                 continue;       //every file inside zip must be used exactly once
 
-            { //check that filenames and header data are same (we cannot detect it by provided manifest, unfortunately)
-                std::map<uint32_t, TargetIter> bytestartToTarget;
+            { //check that filenames and header data are same (TODO: do it without scanning file)
+                std::map<uint32_t, ManifestIter> bytestartToTarget;
                 for (int midx : dstZip._matchIds) {
                     Match m = _owner._matches[midx];
                     bytestartToTarget[m.provided->byterange[0]] = m.target;
@@ -234,24 +234,23 @@ public:
                 bool allSame = true;
                 for (int i = 0; i < k; i++) {
                     SAFE_CALL(i == 0 ? unzGoToFirstFile(zf) : unzGoToNextFile(zf));
-                    ProvidedFile pf;
-                    TargetFile tf;
-                    AnalyzeCurrentFile(zf, pf, tf, false, false);
-                    auto iter = bytestartToTarget.find(pf.byterange[0]);
+                    FileMetainfo tf;
+                    AnalyzeCurrentFile(zf, tf, false, false);
+                    auto iter = bytestartToTarget.find(tf.byterange[0]);
                     if (iter == bytestartToTarget.end()) {
                         allSame = false;
                         break;
                     }
-                    const TargetFile &want = *iter->second;
+                    const FileMetainfo &want = *iter->second;
                     if (want.filename != tf.filename ||
-                        want.fhLastModTime != tf.fhLastModTime ||
-                        want.fhCompressionMethod != tf.fhCompressionMethod ||
-                        want.fhGeneralPurposeBitFlag != tf.fhGeneralPurposeBitFlag ||
-                        want.fhInternalAttribs != tf.fhInternalAttribs ||
-                        want.fhExternalAttribs != tf.fhExternalAttribs ||
-                        want.fhCompressedSize != tf.fhCompressedSize ||
-                        want.fhContentsSize != tf.fhContentsSize ||
-                        want.fhCrc32 != tf.fhCrc32
+                        want.props.lastModTime != tf.props.lastModTime ||
+                        want.props.compressionMethod != tf.props.compressionMethod ||
+                        want.props.generalPurposeBitFlag != tf.props.generalPurposeBitFlag ||
+                        want.props.internalAttribs != tf.props.internalAttribs ||
+                        want.props.externalAttribs != tf.props.externalAttribs ||
+                        want.props.compressedSize != tf.props.compressedSize ||
+                        want.props.contentsSize != tf.props.contentsSize ||
+                        want.props.crc32 != tf.props.crc32
                     ) {
                         allSame = false;
                         break;
@@ -272,17 +271,17 @@ public:
             dstZip._repacked = true;
             srcZip._usedCnt = 0;
             srcZip._reduced = true;
-            std::map<uint32_t, ProvidedIter> filesMap;
-            for (ProvidedIter pf : srcZip._provided) {
-                pf->location = ProvidedLocation::Repacked;
+            std::map<uint32_t, ManifestIter> filesMap;
+            for (ManifestIter pf : srcZip._provided) {
+                pf->location = FileLocation::Repacked;
                 _repackedMani.AppendFile(*pf);
-                filesMap[pf->byterange[0]] = ProvidedIter(_repackedMani, _repackedMani.size() - 1);
+                filesMap[pf->byterange[0]] = ManifestIter(_repackedMani, _repackedMani.size() - 1);
             }
             for (int midx : dstZip._matchIds) {
                 _recompressed.resize(midx + 1, false);
                 _recompressed[midx] = false;
-                ProvidedIter &pf = _owner._matches[midx].provided;
-                ProvidedIter newIter = filesMap.at(pf->byterange[0]);
+                ManifestIter &pf = _owner._matches[midx].provided;
+                ManifestIter newIter = filesMap.at(pf->byterange[0]);
                 pf->Nullify();
                 pf = newIter;
             }
@@ -309,15 +308,15 @@ public:
             bool copyRaw = false;
             if (m.provided->compressedHash == m.target->compressedHash)
                 copyRaw = true;  //bitwise same
-            if (_owner._updateType == UpdateType::SameContents && m.target->fhCompressionMethod == info.compression_method && m.target->fhGeneralPurposeBitFlag == info.flag)
+            if (_owner._updateType == UpdateType::SameContents && m.target->props.compressionMethod == info.compression_method && m.target->props.generalPurposeBitFlag == info.flag)
                 copyRaw = true;  //same compression level
 
             //copy the file to the new zip
             minizipCopyFile(zf, zfOut,
                 m.target->filename.c_str(),
-                m.target->fhCompressionMethod, m.target->fhGeneralPurposeBitFlag,
-                m.target->fhInternalAttribs, m.target->fhExternalAttribs, m.target->fhLastModTime,
-                copyRaw, m.target->fhCrc32, m.target->fhContentsSize
+                m.target->props.compressionMethod, m.target->props.generalPurposeBitFlag,
+                m.target->props.internalAttribs, m.target->props.externalAttribs, m.target->props.lastModTime,
+                copyRaw, m.target->props.crc32, m.target->props.contentsSize
             );
             //remember whether we repacked or not --- to be used in AnalyzeRepackedZip
             _recompressed.resize(midx+1, false);
@@ -329,23 +328,23 @@ public:
         zip._repacked = true;
     }
 
-    void ValidateFile(const TargetFile &want, const TargetFile &have) const {
+    void ValidateFile(const FileMetainfo &want, const FileMetainfo &have) const {
         std::string fullPath = GetFullPath(have.zipPath.abs, have.filename);
         //zipPath is different while repacking
         //package does not need to be checked
         ZipSyncAssertF(want.filename == have.filename, "Wrong filename of %s after repack: need %s", fullPath.c_str(), want.filename.c_str());
         ZipSyncAssertF(want.contentsHash == have.contentsHash, "Wrong contents hash of %s after repack", fullPath.c_str());
-        ZipSyncAssertF(want.fhContentsSize == have.fhContentsSize, "Wrong contents size of %s after repack", fullPath.c_str());
-        ZipSyncAssertF(want.fhCrc32 == have.fhCrc32, "Wrong crc32 of %s after repack", fullPath.c_str());
+        ZipSyncAssertF(want.props.contentsSize == have.props.contentsSize, "Wrong contents size of %s after repack", fullPath.c_str());
+        ZipSyncAssertF(want.props.crc32 == have.props.crc32, "Wrong crc32 of %s after repack", fullPath.c_str());
         if (_owner._updateType == UpdateType::SameCompressed) {
             ZipSyncAssertF(want.compressedHash == have.compressedHash, "Wrong compressed hash of %s after repack", fullPath.c_str());
-            ZipSyncAssertF(want.fhCompressedSize == have.fhCompressedSize, "Wrong compressed size of %s after repack", fullPath.c_str());
+            ZipSyncAssertF(want.props.compressedSize == have.props.compressedSize, "Wrong compressed size of %s after repack", fullPath.c_str());
         }
-        ZipSyncAssertF(want.fhCompressionMethod == have.fhCompressionMethod, "Wrong compression method of %s after repack", fullPath.c_str());
-        ZipSyncAssertF(want.fhGeneralPurposeBitFlag == have.fhGeneralPurposeBitFlag, "Wrong flags of %s after repack", fullPath.c_str());
-        ZipSyncAssertF(want.fhLastModTime == have.fhLastModTime, "Wrong modification time of %s after repack", fullPath.c_str());
-        ZipSyncAssertF(want.fhInternalAttribs == have.fhInternalAttribs, "Wrong internal attribs of %s after repack", fullPath.c_str());
-        ZipSyncAssertF(want.fhExternalAttribs == have.fhExternalAttribs, "Wrong external attribs of %s after repack", fullPath.c_str());
+        ZipSyncAssertF(want.props.compressionMethod == have.props.compressionMethod, "Wrong compression method of %s after repack", fullPath.c_str());
+        ZipSyncAssertF(want.props.generalPurposeBitFlag == have.props.generalPurposeBitFlag, "Wrong flags of %s after repack", fullPath.c_str());
+        ZipSyncAssertF(want.props.lastModTime == have.props.lastModTime, "Wrong modification time of %s after repack", fullPath.c_str());
+        ZipSyncAssertF(want.props.internalAttribs == have.props.internalAttribs, "Wrong internal attribs of %s after repack", fullPath.c_str());
+        ZipSyncAssertF(want.props.externalAttribs == have.props.externalAttribs, "Wrong external attribs of %s after repack", fullPath.c_str());
     }
 
     void AnalyzeRepackedZip(const ZipInfo &zip) {
@@ -359,28 +358,27 @@ public:
 
             //analyze current file
             bool needsRehashCompressed = _recompressed[midx];
-            TargetFile targetNew;
-            ProvidedFile providedNew;
-            providedNew.zipPath = targetNew.zipPath = PathAR::FromAbs(zip._zipPathRepacked, _owner._rootDir);
-            providedNew.location = ProvidedLocation::Repacked;
-            targetNew.package = "[repacked]";
-            providedNew.contentsHash = targetNew.contentsHash = m.provided->contentsHash;
-            providedNew.compressedHash = targetNew.compressedHash = m.provided->compressedHash;   //will be recomputed if needsRehashCompressed
-            AnalyzeCurrentFile(zf, providedNew, targetNew, false, needsRehashCompressed);
+            FileMetainfo metaNew;
+            metaNew.zipPath = PathAR::FromAbs(zip._zipPathRepacked, _owner._rootDir);
+            metaNew.location = FileLocation::Repacked;
+            metaNew.package = "[repacked]";
+            metaNew.contentsHash = m.provided->contentsHash;
+            metaNew.compressedHash = m.provided->compressedHash;   //will be recomputed if needsRehashCompressed
+            AnalyzeCurrentFile(zf, metaNew, false, needsRehashCompressed);
             //check that it indeed matches the target
-            ValidateFile(*m.target, targetNew);
+            ValidateFile(*m.target, metaNew);
 
             //decrement ref count on zip (which might allow to "reduce" it in ReduceOldZips)
             int &usedCnt = FindZip(m.provided->zipPath.abs)._usedCnt;
             ZipSyncAssert(usedCnt >= 0);
             usedCnt--;
             //increment ref count on compressed hash
-            _hashProvidedCnt[providedNew.compressedHash]++;
+            _hashProvidedCnt[metaNew.compressedHash]++;
 
             //add info about file to special manifest
-            _repackedMani.AppendFile(providedNew);
+            _repackedMani.AppendFile(metaNew);
             //switch the match for the target file to this new file
-            m.provided = ProvidedIter(_repackedMani, _repackedMani.size() - 1);
+            m.provided = ManifestIter(_repackedMani, _repackedMani.size() - 1);
         }
         zf.reset();
     }
@@ -400,14 +398,14 @@ public:
                 ZipFileHolder zfOut(zip._zipPathReduced.c_str());
 
                 //go over files and copy unique ones to reduced zip
-                std::vector<ProvidedFile> copiedFiles;
+                std::vector<FileMetainfo> copiedFiles;
                 SAFE_CALL(unzGoToFirstFile(zf));
                 while (1) {
                     //find current file in provided manifest
                     uint32_t range[2];
                     unzGetCurrentFilePosition(zf, &range[0], NULL, &range[1]);
-                    ProvidedIter found;
-                    for (ProvidedIter pf : zip._provided) {
+                    ManifestIter found;
+                    for (ManifestIter pf : zip._provided) {
                         if (pf->byterange[0] == range[0] && pf->byterange[1] == range[1]) {
                             ZipSyncAssertF(!found, "Provided manifest of %s has duplicate byteranges", zip._zipPath.c_str());
                             found = pf;
@@ -451,11 +449,10 @@ public:
                     UnzFileHolder zf(zip._zipPathReduced.c_str());
                     SAFE_CALL(unzGoToFirstFile(zf));
                     for (int i = 0; i < copiedFiles.size(); i++) {
-                        ProvidedFile pf;
-                        TargetFile tf;
-                        AnalyzeCurrentFile(zf, pf, tf, false, false);
+                        FileMetainfo pf;
+                        AnalyzeCurrentFile(zf, pf, false, false);
                         pf.zipPath = PathAR::FromAbs(zip._zipPathReduced, _owner._rootDir);
-                        pf.location = ProvidedLocation::Reduced;
+                        pf.location = FileLocation::Reduced;
                         pf.contentsHash = copiedFiles[i].contentsHash;
                         pf.compressedHash = copiedFiles[i].compressedHash;
                         _reducedMani.AppendFile(pf);
@@ -467,7 +464,7 @@ public:
                 //remove the old file
                 RemoveFile(zip._zipPath);
                 //nullify all provided files from the removed zip
-                for (ProvidedIter pf : zip._provided) {
+                for (ManifestIter pf : zip._provided) {
                     pf->Nullify();
                 }
             }
@@ -494,15 +491,15 @@ public:
             }
             //update provided files in repacked zip (all of them must be among matches by now)
             for (int midx : zip._matchIds) {
-                ProvidedFile &pf = *_owner._matches[midx].provided;
+                FileMetainfo &pf = *_owner._matches[midx].provided;
                 pf.zipPath = PathAR::FromAbs(zip._zipPath, _owner._rootDir);
-                pf.location = ProvidedLocation::Inplace;
+                pf.location = FileLocation::Inplace;
             }
         }
     }
 
     void RewriteProvidedManifest() {
-        ProvidedManifest newProvidedMani;
+        Manifest newProvidedMani;
 
         for (int i = 0; i < _repackedMani.size(); i++)
             newProvidedMani.AppendFile(std::move(_repackedMani[i]));
@@ -511,8 +508,8 @@ public:
             newProvidedMani.AppendFile(std::move(_reducedMani[i]));
         _reducedMani.Clear();
         for (int i = 0; i < _owner._providedMani.size(); i++) {
-            ProvidedFile &pf = _owner._providedMani[i];
-            if (pf.location == ProvidedLocation::Nowhere)
+            FileMetainfo &pf = _owner._providedMani[i];
+            if (pf.location == FileLocation::Nowhere)
                 continue;       //was removed during zip-reduce
             newProvidedMani.AppendFile(std::move(pf));
         }
@@ -570,7 +567,7 @@ void UpdateProcess::DownloadRemoteFiles() {
     Downloader downloader;
     for (int midx = 0; midx < _matches.size(); midx++) {
         const Match &m = _matches[midx];
-        if (m.provided->location != ProvidedLocation::RemoteHttp)
+        if (m.provided->location != FileLocation::RemoteHttp)
             continue;
         const std::string &url = m.provided->zipPath.abs;
 
@@ -623,7 +620,7 @@ void UpdateProcess::DownloadRemoteFiles() {
             Match &m = _matches[matchIdx];
 
             //verify hash of the downloaded file (we must be sure that it is correct)
-            //TODO: what if bad mirror takes compressed file and marks at as uncompressed in zip?...
+            //TODO: what if bad mirror changes file local header?...
             uint32_t size = (m.provided->byterange[1] - m.provided->byterange[0]);
             ZipSyncAssert(unzLocateFileAtBytes(zf, m.provided->filename.c_str(), offset, offset + size));
             SAFE_CALL(unzOpenCurrentFile2(zf, NULL, NULL, true));
@@ -646,15 +643,15 @@ void UpdateProcess::DownloadRemoteFiles() {
             std::string fullPath = GetFullPath(url, m.provided->filename);
             ZipSyncAssertF(obtainedHash == expectedHash, "Hash of \"%s\" after download is %s instead of %s", fullPath.c_str(), obtainedHash.Hex().c_str(), expectedHash.Hex().c_str());
 
-            ProvidedFile pf = *m.provided;
+            FileMetainfo pf = *m.provided;
             pf.zipPath = state.path;
             pf.byterange[0] = offset;
             pf.byterange[1] = offset + size;
-            pf.location = ProvidedLocation::Local;
+            pf.location = FileLocation::Local;
 
             int pi = _providedMani.size();
             _providedMani.AppendFile(pf);
-            m.provided = ProvidedIter(_providedMani, pi);
+            m.provided = ManifestIter(_providedMani, pi);
         }
     }
 

@@ -20,19 +20,19 @@ class UpdateProcess {
 public:
     struct Match {
         //target file (surely not NULL)
-        TargetIter target;
+        ManifestIter target;
         //provided file which will fulfill it (NULL if no match found)
-        ProvidedIter provided;
+        ManifestIter provided;
     };
 
 private:
     //the target manifest being the goal of this update
-    TargetManifest _targetMani;
+    Manifest _targetMani;
     //the provided manifest showing the current state of installation
     //note: it is changed during the update process
-    ProvidedManifest _providedMani;
+    Manifest _providedMani;
     //the root directory of installation being updated
-    //all target files zip paths are treated relative to it
+    //all target zip paths are treated relative to it
     std::string _rootDir;
     //which type of "sameness" we want to achieve
     UpdateType _updateType;
@@ -48,7 +48,7 @@ private:
 
 public:
     //must be called prior to any usage of an instance
-    void Init(TargetManifest &&targetMani, ProvidedManifest &&providedMani, const std::string &rootDir);
+    void Init(const Manifest &targetMani, const Manifest &providedMani, const std::string &rootDir);
     void AddManagedZip(const std::string &zipPath, bool relative = false);
 
     //decide how to execute the update (which files to find where)
@@ -63,7 +63,7 @@ public:
     void RemoveOldZips(const LocalCache *cache);
 
 
-    const ProvidedManifest &GetProvidedManifest() const { return _providedMani; }
+    const Manifest &GetProvidedManifest() const { return _providedMani; }
 
     int MatchCount() const { return _matches.size(); }
     const Match &GetMatch(int idx) const { return _matches[idx]; }
