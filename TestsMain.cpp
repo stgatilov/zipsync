@@ -269,64 +269,63 @@ string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
     Manifest mani;
     AppendManifestsFromLocalZip(
         zipPath1, rootDir,
-        ProvidedLocation::Local, "default",
-        provided, target
+        FileLocation::Local, "default",
+        mani
     );
     AppendManifestsFromLocalZip(
         zipPath2, rootDir,
-        ProvidedLocation::RemoteHttp, "chaos",
-        provided, target
+        FileLocation::RemoteHttp, "chaos",
+        mani
     );
 
-    REQUIRE(provided.size() == 4);
-    REQUIRE(target.size() == 4);
-    REQUIRE(provided[0].filename == fnPkgJson   );
-    REQUIRE(provided[1].filename == fnRndDat    );
-    REQUIRE(provided[2].filename == fnSeqBin    );
-    REQUIRE(provided[3].filename == fnDoubleDump);
-    for (int i = 0; i < target.size(); i++)
-        REQUIRE(target[i].filename == provided[i].filename);
+    REQUIRE(mani.size() == 4);
+    REQUIRE(mani[0].filename == fnPkgJson   );
+    REQUIRE(mani[1].filename == fnRndDat    );
+    REQUIRE(mani[2].filename == fnSeqBin    );
+    REQUIRE(mani[3].filename == fnDoubleDump);
 
-    CHECK(provided[0].zipPath.abs == zipPath1);  CHECK(target[0].zipPath.abs == zipPath1);
-    CHECK(provided[1].zipPath.abs == zipPath1);  CHECK(target[1].zipPath.abs == zipPath1);
-    CHECK(provided[2].zipPath.abs == zipPath1);  CHECK(target[2].zipPath.abs == zipPath1);
-    CHECK(provided[3].zipPath.abs == zipPath2);  CHECK(target[3].zipPath.abs == zipPath2);
-    CHECK(provided[0].location == ProvidedLocation::Local);       CHECK(target[0].package == "default");
-    CHECK(provided[1].location == ProvidedLocation::Local);       CHECK(target[1].package == "default");
-    CHECK(provided[2].location == ProvidedLocation::Local);       CHECK(target[2].package == "default");
-    CHECK(provided[3].location == ProvidedLocation::RemoteHttp);  CHECK(target[3].package == "chaos"  );
-    CHECK(provided[0].contentsHash.Hex() == "8ec061d20526f1e5ce56519f09bc1ee2ad065464e3e7cbbb94324865bca95a45"); //computed externally in Python
-    CHECK(provided[1].contentsHash.Hex() == "75b25a4dd22ac100925e09d62016c0ffdb5998b470bc685773620d4f37458b69");
-    CHECK(provided[2].contentsHash.Hex() == "54b97c474a60b36c16a5c6beea5b2a03a400096481196bbfe2202ef7a547408c");
-    CHECK(provided[3].contentsHash.Hex() == "009c0860b467803040c61deb6544a3f515ac64c63d234e286d3e2fa352411e91");
-    for (int i = 0; i < target.size(); i++)
-        CHECK(target[i].contentsHash == provided[i].contentsHash);
-    CHECK(target[0].fhLastModTime == 0);
-    CHECK(target[1].fhLastModTime == 0);
-    CHECK(target[2].fhLastModTime == 123456789);
-    CHECK(target[3].fhLastModTime == 0);
-    CHECK(target[0].fhCompressionMethod == Z_DEFLATED);
-    CHECK(target[1].fhCompressionMethod == 0);
-    CHECK(target[2].fhCompressionMethod == Z_DEFLATED);
-    CHECK(target[3].fhCompressionMethod == Z_DEFLATED);
+    CHECK(mani[0].zipPath.abs == zipPath1);
+    CHECK(mani[1].zipPath.abs == zipPath1);
+    CHECK(mani[2].zipPath.abs == zipPath1);
+    CHECK(mani[3].zipPath.abs == zipPath2);
+    CHECK(mani[0].location == FileLocation::Local);
+    CHECK(mani[1].location == FileLocation::Local);
+    CHECK(mani[2].location == FileLocation::Local);
+    CHECK(mani[3].location == FileLocation::RemoteHttp);
+    CHECK(mani[0].package == "default");
+    CHECK(mani[1].package == "default");
+    CHECK(mani[2].package == "default");
+    CHECK(mani[3].package == "chaos"  );
+    CHECK(mani[0].contentsHash.Hex() == "8ec061d20526f1e5ce56519f09bc1ee2ad065464e3e7cbbb94324865bca95a45"); //computed externally in Python
+    CHECK(mani[1].contentsHash.Hex() == "75b25a4dd22ac100925e09d62016c0ffdb5998b470bc685773620d4f37458b69");
+    CHECK(mani[2].contentsHash.Hex() == "54b97c474a60b36c16a5c6beea5b2a03a400096481196bbfe2202ef7a547408c");
+    CHECK(mani[3].contentsHash.Hex() == "009c0860b467803040c61deb6544a3f515ac64c63d234e286d3e2fa352411e91");
+    CHECK(mani[0].props.lastModTime == 0);
+    CHECK(mani[1].props.lastModTime == 0);
+    CHECK(mani[2].props.lastModTime == 123456789);
+    CHECK(mani[3].props.lastModTime == 0);
+    CHECK(mani[0].props.compressionMethod == Z_DEFLATED);
+    CHECK(mani[1].props.compressionMethod == 0);
+    CHECK(mani[2].props.compressionMethod == Z_DEFLATED);
+    CHECK(mani[3].props.compressionMethod == Z_DEFLATED);
 #define SIZE_BUF(buf) buf.size() * sizeof(buf[0])
-    CHECK(target[0].fhContentsSize == SIZE_BUF(cntPkgJson));
-    CHECK(target[1].fhContentsSize == SIZE_BUF(cntRndDat));
-    CHECK(target[2].fhContentsSize == SIZE_BUF(cntSeqBin));
-    CHECK(target[3].fhContentsSize == SIZE_BUF(cntDoubleDump));
+    CHECK(mani[0].props.contentsSize == SIZE_BUF(cntPkgJson));
+    CHECK(mani[1].props.contentsSize == SIZE_BUF(cntRndDat));
+    CHECK(mani[2].props.contentsSize == SIZE_BUF(cntSeqBin));
+    CHECK(mani[3].props.contentsSize == SIZE_BUF(cntDoubleDump));
 #undef SIZE_BUF
-    CHECK(target[0].fhGeneralPurposeBitFlag == 0);     //"normal"
-    CHECK(target[1].fhGeneralPurposeBitFlag == 0);     //no compression (stored)
-    CHECK(target[2].fhGeneralPurposeBitFlag == 2);     //"maximum"
-    CHECK(target[3].fhGeneralPurposeBitFlag == 6);     //"super fast"
-    CHECK(target[0].fhInternalAttribs == 1);        //Z_TEXT
-    CHECK(target[1].fhInternalAttribs == 0);        //Z_BINARY
-    CHECK(target[2].fhInternalAttribs == 123);      //custom (see above)
-    CHECK(target[3].fhInternalAttribs == 0);        //Z_BINARY
-    CHECK(target[0].fhExternalAttribs == 0);
-    CHECK(target[1].fhExternalAttribs == 0);
-    CHECK(target[2].fhExternalAttribs == 0xDEADBEEF);
-    CHECK(target[3].fhExternalAttribs == 0);
+    CHECK(mani[0].props.generalPurposeBitFlag == 0);     //"normal"
+    CHECK(mani[1].props.generalPurposeBitFlag == 0);     //no compression (stored)
+    CHECK(mani[2].props.generalPurposeBitFlag == 2);     //"maximum"
+    CHECK(mani[3].props.generalPurposeBitFlag == 6);     //"super fast"
+    CHECK(mani[0].props.internalAttribs == 1);        //Z_TEXT
+    CHECK(mani[1].props.internalAttribs == 0);        //Z_BINARY
+    CHECK(mani[2].props.internalAttribs == 123);      //custom (see above)
+    CHECK(mani[3].props.internalAttribs == 0);        //Z_BINARY
+    CHECK(mani[0].props.externalAttribs == 0);
+    CHECK(mani[1].props.externalAttribs == 0);
+    CHECK(mani[2].props.externalAttribs == 0xDEADBEEF);
+    CHECK(mani[3].props.externalAttribs == 0);
 
     double RATIOS[4][2] = {
         {0.5, 0.75},        //text is rather compressible
@@ -335,29 +334,28 @@ string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
         {0.3, 0.4},         //doubles are well-compressible
     };
     for (int i = 0; i < 4; i++) {
-        double ratio = double(target[i].fhCompressedSize) / target[i].fhContentsSize;
+        double ratio = double(mani[i].props.compressedSize) / mani[i].props.contentsSize;
         CHECK(ratio >= RATIOS[i][0]);  CHECK(ratio <= RATIOS[i][1]);
     }
 
     for (int i = 0; i < 4; i++) {
-        const uint32_t *br = provided[i].byterange;
+        const uint32_t *br = mani[i].byterange;
         std::vector<char> fdata(br[1] - br[0]);
-        int totalSize = target[i].fhCompressedSize + target[i].filename.size() + 30;
+        int totalSize = mani[i].props.compressedSize + mani[i].filename.size() + 30;
         CHECK(fdata.size() == totalSize);
 
-        FILE *f = fopen(provided[i].zipPath.abs.c_str(), "rb");
+        FILE *f = fopen(mani[i].zipPath.abs.c_str(), "rb");
         REQUIRE(f);
         fseek(f, br[0], SEEK_SET);
         CHECK(fread(fdata.data(), 1, fdata.size(), f) == fdata.size());
         fclose(f);
 
         CHECK(*(int*)&fdata[0] == 0x04034b50);   //local file header signature
-        CHECK(memcmp(&fdata[30], target[i].filename.c_str(), target[i].filename.size()) == 0);
+        CHECK(memcmp(&fdata[30], mani[i].filename.c_str(), mani[i].filename.size()) == 0);
 
-        int offs = fdata.size() - target[i].fhCompressedSize, sz = target[i].fhCompressedSize;
+        int offs = fdata.size() - mani[i].props.compressedSize, sz = mani[i].props.compressedSize;
         HashDigest digest = Hasher().Update(fdata.data() + offs, sz).Finalize();
-        CHECK(target[i].compressedHash == digest);
-        CHECK(target[i].compressedHash == provided[i].compressedHash);
+        CHECK(mani[i].compressedHash == digest);
     }
 }
 
