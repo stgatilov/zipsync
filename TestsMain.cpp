@@ -426,11 +426,11 @@ TEST_CASE("BadZips") {
 }
 
 TEST_CASE("UpdateProcess::DevelopPlan") {
-    ProvidedManifest provided;
-    TargetManifest target;
+    Manifest provided;
+    Manifest target;
 
     struct MatchAnswer {
-        int bestLocation = int(ProvidedLocation::Nowhere);
+        int bestLocation = int(FileLocation::Nowhere);
         std::vector<std::string> filenames;
     };
     //for each target filename: list of provided filenames which match
@@ -443,7 +443,7 @@ TEST_CASE("UpdateProcess::DevelopPlan") {
         for (mode[1] = 0; mode[1] < 5; mode[1]++) {
             for (mode[2] = 0; mode[2] < 5; mode[2]++) {
                 int targetIdx = target.size();
-                TargetFile tf;
+                FileMetainfo tf;
                 tf.contentsHash = GenHash(targetIdx);
                 tf.compressedHash = GenHash(targetIdx + 1000);
                 tf.zipPath = PathAR::FromRel("target" + std::to_string(targetIdx % 4) + ".zip", "nowhere");
@@ -462,23 +462,23 @@ TEST_CASE("UpdateProcess::DevelopPlan") {
                         int providedIdx = provided.size();
                         int m = modes[j];
 
-                        ProvidedFile pf;
+                        FileMetainfo pf;
                         pf.byterange[0] = (providedIdx+0) * 100000;
                         pf.byterange[1] = (providedIdx+1) * 100000;
                         pf.contentsHash = (m >= 1 ? tf.contentsHash : GenHash(providedIdx + 2000));
                         pf.compressedHash = (m == 2 ? tf.compressedHash : GenHash(providedIdx + 3000));
                         if (pl == 0) {
-                            pf.location = ProvidedLocation::Local;     //Inplace must be set of DevelopPlan
+                            pf.location = FileLocation::Local;     //Inplace must be set of DevelopPlan
                             pf.zipPath = tf.zipPath;
                             pf.filename = tf.filename;
                         }
                         else if (pl == 1) {
-                            pf.location = ProvidedLocation::Local;
+                            pf.location = FileLocation::Local;
                             pf.zipPath = PathAR::FromRel("other" + std::to_string(providedIdx % 4) + ".zip", "nowhere");
                             pf.filename = "some_file" + std::to_string(providedIdx);
                         }
                         else if (pl == 2) {
-                            pf.location = ProvidedLocation::RemoteHttp;
+                            pf.location = FileLocation::RemoteHttp;
                             pf.zipPath = PathAR::FromRel("other" + std::to_string(providedIdx % 4) + ".zip", "http://localhost:7123");
                             pf.filename = "some_file" + std::to_string(providedIdx);
                         }
@@ -510,8 +510,8 @@ TEST_CASE("UpdateProcess::DevelopPlan") {
         //try to develop update plan in both modes
         for (int t = 0; t < 2; t++) {
 
-            TargetManifest targetCopy = target;
-            ProvidedManifest providedCopy = provided;
+            Manifest targetCopy = target;
+            Manifest providedCopy = provided;
             if (attempt > 0) {
                 //note: here we assume that files are stored in a vector =(
                 std::shuffle(&targetCopy[0], &targetCopy[0] + targetCopy.size(), rnd);
