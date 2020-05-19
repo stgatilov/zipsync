@@ -600,10 +600,15 @@ public:
 
 //==========================================================================================
 
-void Fuzz(std::string where) {
+void Fuzz(std::string where, int casesNum) {
+    static const int SPECIAL_SEEDS[] = {8573};
+    int SK = sizeof(SPECIAL_SEEDS) / sizeof(SPECIAL_SEEDS[0]);
+    if (casesNum < 0)
+        casesNum = 1000000000;  //infinite
     Fuzzer fuzz;
-    for (int attempt = 0; attempt < 1000000000; attempt++) {
-        fuzz.GenerateInput(where + "/" + std::to_string(attempt), attempt);
+    for (int attempt = -SK; attempt < casesNum; attempt++) {
+        int seed = (attempt < 0 ? SPECIAL_SEEDS[attempt + SK] : attempt);
+        fuzz.GenerateInput(where + "/" + std::to_string(seed), seed);
         if (!fuzz.ValidateInput())
             continue;
         fuzz.WriteInput();

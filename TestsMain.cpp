@@ -615,3 +615,7 @@ TEST_CASE("FuzzTemp"
 ) {
     Fuzz((GetTempDir()).string());
 }
+
+TEST_CASE("FuzzLocal50") {
+    Fuzz((GetTempDir()).string(), 50);
+}

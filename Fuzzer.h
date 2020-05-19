@@ -5,6 +5,6 @@
 
 namespace ZipSync {
 
-void Fuzz(std::string where);
+void Fuzz(std::string where, int casesNum = -1);
 
 }
