@@ -4,6 +4,7 @@
 #include <random>
 #include <chrono>
 
+#include "Utils.h"
 #include "StdFilesystem.h"
 #include "ZipSync.h"
 #include "Fuzzer.h"
@@ -78,6 +79,41 @@ template<class T> const T &Search(const std::vector<std::pair<std::string, T>> &
     }
     REQUIRE(cnt == 1);
     return data[pos].second;
+}
+
+TEST_CASE("FileUtils") {
+    auto dir = GetTempDir();
+    stdext::create_directories(dir);
+
+    CHECK(IfFileExists((dir / "non_existing_file.txt").string()) == false);
+    {
+        StdioFileHolder f(fopen((dir / "existing_file.txt").string().c_str(), "wt"));
+        fprintf(f, "Test message!\n");
+    }
+    CHECK(IfFileExists((dir / "existing_file.txt").string()) == true);
+
+    RenameFile((dir / "existing_file.txt").string(), (dir / "renamed_file.txt").string());
+    CHECK(IfFileExists((dir / "existing_file.txt").string()) == false);
+    CHECK(IfFileExists((dir / "renamed_file.txt").string()) == true);
+    CHECK_THROWS(RenameFile((dir / "existing_file.txt").string(), (dir / "renamed_file.txt").string()));
+
+    RemoveFile((dir / "renamed_file.txt").string());
+    CHECK(IfFileExists((dir / "renamed_file.txt").string()) == false);
+    CHECK_THROWS(RemoveFile((dir / "renamed_file.txt").string()));
+
+    CHECK(CreateDir((dir / "test_dir").string()) == true);
+    CHECK(CreateDir((dir / "test_dir").string()) == false);
+    {
+        StdioFileHolder f(fopen((dir / "test_dir" / "test_file").string().c_str(), "wt"));
+    }
+
+    CreateDirectoriesForFile((dir / "test_file").string(), dir.string());
+    CreateDirectoriesForFile((dir / "test_dir" / "test_file").string(), dir.string());
+    CreateDirectoriesForFile((dir / "test_dir" / "a" / "b" / "c" / "test_file").string(), dir.string());
+    {
+        StdioFileHolder f(fopen((dir / "test_dir" / "a" / "b" / "c" / "test_file").string().c_str(), "wt"));
+    }
+    CHECK(IfFileExists((dir / "test_dir" / "a" / "b" / "c" / "test_file").string()) == true);
 }
 
 TEST_CASE("ProvidedManifest: Read/Write") {
