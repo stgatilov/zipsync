@@ -608,6 +608,13 @@ void Fuzz(std::string where, int casesNum) {
     Fuzzer fuzz;
     for (int attempt = -SK; attempt < casesNum; attempt++) {
         int seed = (attempt < 0 ? SPECIAL_SEEDS[attempt + SK] : attempt);
+        bool duplicate = false;
+        for (int i = 0; i < SK; i++)
+            if (SPECIAL_SEEDS[i] == seed)
+                duplicate = true;
+        if (duplicate)
+            continue;
+
         fuzz.GenerateInput(where + "/" + std::to_string(seed), seed);
         if (!fuzz.ValidateInput())
             continue;
