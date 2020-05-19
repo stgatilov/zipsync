@@ -16,8 +16,8 @@ namespace ZipSync {
 typedef std::uniform_int_distribution<int> IntD;
 typedef std::uniform_real_distribution<double> DblD;
 
-template<class Mani, class Lambda> Mani FilterManifest(const Mani &srcMani, const Lambda &ifCopy) {
-    Mani res;
+template<class Lambda> Manifest FilterManifest(const Manifest &srcMani, const Lambda &ifCopy) {
+    Manifest res;
     for (int i = 0; i < srcMani.size(); i++)
         if (ifCopy(srcMani[i]))
             res.AppendFile(srcMani[i]);
@@ -392,7 +392,7 @@ rank 	  lemma / word 	PoS 	freq 	dispersion
         return false;
     }
 
-    void WriteState(const std::string &rootPath, const DirState &state, TargetManifest *targetMani, ProvidedManifest *providedMani) {
+    void WriteState(const std::string &rootPath, const DirState &state, Manifest *mani) {
         for (const auto &zipPair : state) {
             PathAR zipPath = PathAR::FromRel(zipPair.first, rootPath);
             stdext::create_directories(stdext::path(zipPath.abs).parent_path());
@@ -415,10 +415,8 @@ rank 	  lemma / word 	PoS 	freq 	dispersion
             }
             zf.reset();
 
-            if (targetMani)
-                targetMani->AppendLocalZip(zipPath.abs, rootPath, "default");
-            if (providedMani)
-                providedMani->AppendLocalZip(zipPath.abs, rootPath);
+            if (mani)
+                mani->AppendLocalZip(zipPath.abs, rootPath, "default");
         }
     }
 };
@@ -439,8 +437,8 @@ class Fuzzer : private FuzzerGenerator {
     bool _shouldUpdateSucceed;
 
     //initial manifests passed to the updater
-    TargetManifest _initialTargetMani;
-    ProvidedManifest _initialProvidedMani;
+    Manifest _initialTargetMani;
+    Manifest _initialProvidedMani;
 
     //the update class
     std::unique_ptr<UpdateProcess> _updater;
@@ -452,21 +450,28 @@ class Fuzzer : private FuzzerGenerator {
     int _numCasesActualSucceed = 0;     //actually updated successfully
 
     //various manifests after update
-    ProvidedManifest _finalComputedProvidedMani;    //computed by UpdateProcess during update
-    TargetManifest _finalActualTargetMani;          //real contents of "inplace" dir (without "reduced" zips)
-    ProvidedManifest _finalActualProvidedMani;      //real contents of "inplace" dir (includes "reduced" zips)
+    Manifest _finalComputedProvidedMani;    //computed by UpdateProcess during update
+    Manifest _finalActualTargetMani;        //real contents of "inplace" dir (without "reduced" zips)
+    Manifest _finalActualProvidedMani;      //real contents of "inplace" dir (includes "reduced" zips)
 
-    void AssertManifestsSame(IniData &&iniDataA, std::string dumpFnA, IniData &&iniDataB, std::string dumpFnB, bool ignoreCompressedHash = false) const {
-        auto ClearCompressedHash = [](IniData &ini) {
+    void AssertManifestsSame(IniData &&iniDataA, std::string dumpFnA, IniData &&iniDataB, std::string dumpFnB, bool ignoreCompressedHash = false, bool ignoreByterange = false) const {
+        auto ClearCompressedHash = [&](IniData &ini) {
             for (auto& pSect : ini)
-                for (auto &pProp : pSect.second)
-                    if (pProp.first == "compressedHash" || pProp.first == "compressedSize")
+                for (auto &pProp : pSect.second) {
+                    if (ignoreCompressedHash) {
+                        if (pProp.first == "compressedHash" || pProp.first == "compressedSize")
+                            pProp.second = "(removed)";
+                    }
+                    if (ignoreByterange) {
+                        if (pProp.first == "byterange")
+                            pProp.second = "(removed)";
+                    }
+                    if (pProp.first == "package")
                         pProp.second = "(removed)";
+                }
         };
-        if (ignoreCompressedHash) {
-            ClearCompressedHash(iniDataA);
-            ClearCompressedHash(iniDataB);
-        }
+        ClearCompressedHash(iniDataA);
+        ClearCompressedHash(iniDataB);
         if (iniDataA != iniDataB) {
             WriteIniFile((_baseDir + "/" + dumpFnA).c_str(), iniDataA);
             WriteIniFile((_baseDir + "/" + dumpFnB).c_str(), iniDataB);
@@ -515,15 +520,15 @@ public:
     void WriteInput() {
         _initialTargetMani.Clear();
         _initialProvidedMani.Clear();
-        WriteState(_rootTargetDir, _initialTargetState, &_initialTargetMani, nullptr);
-        WriteState(_rootInplaceDir, _initialInplaceState, nullptr, &_initialProvidedMani);
-        WriteState(_rootLocalDir, _initialLocalState, nullptr, &_initialProvidedMani);
+        WriteState(_rootTargetDir, _initialTargetState, &_initialTargetMani);
+        WriteState(_rootInplaceDir, _initialInplaceState, &_initialProvidedMani);
+        WriteState(_rootLocalDir, _initialLocalState, &_initialProvidedMani);
     }
 
     bool DoUpdate() {
         _updater.reset(new UpdateProcess());
 
-        _updater->Init(TargetManifest(_initialTargetMani), ProvidedManifest(_initialProvidedMani), _rootInplaceDir);
+        _updater->Init(_initialTargetMani, _initialProvidedMani, _rootInplaceDir);
         for (const auto &zipPair : _initialInplaceState)
             _updater->AddManagedZip(_rootInplaceDir + "/" + zipPair.first);
 
@@ -551,38 +556,40 @@ public:
         auto resultPaths = stdext::recursive_directory_enumerate(_rootInplaceDir);
         _finalActualTargetMani.Clear();
         _finalActualProvidedMani.Clear();
-        ProvidedManifest actualProvidedMani;
+        Manifest actualProvidedMani;
         for (stdext::path filePath : resultPaths) {
             if (!stdext::is_regular_file(filePath))
                 continue;
             if (!stdext::starts_with(filePath.filename().string(), "__reduced__")) {
                 _finalActualTargetMani.AppendLocalZip(filePath.string(), _rootInplaceDir, "default");
             }
-            _finalActualProvidedMani.AppendLocalZip(filePath.string(), _rootInplaceDir);
+            _finalActualProvidedMani.AppendLocalZip(filePath.string(), _rootInplaceDir, "default");
         }
 
         //check: the actual state exactly matches what we wanted to obtain (compressed hash may differ depending on options)
         AssertManifestsSame(
             _initialTargetMani.WriteToIni(), "target_expected.ini",
             _finalActualTargetMani.WriteToIni(), "target_obtained.ini",
-            _updateType == UpdateType::SameContents
+            _updateType == UpdateType::SameContents,    //compressed data may not match unless requested explicitly
+            _updateType == UpdateType::SameContents     //byterange may not match if recompression happened
         );
 
         //check: the provided manifest computed by updater exactly represents the current state
-        ProvidedManifest inplaceComputedProvidedMani = FilterManifest(_finalComputedProvidedMani, [&](const ProvidedFile &f) {
+        Manifest inplaceComputedProvidedMani = FilterManifest(_finalComputedProvidedMani, [&](const FileMetainfo &f) {
             return f.zipPath.GetRootDir() == _rootInplaceDir;
         });
         AssertManifestsSame(
             inplaceComputedProvidedMani.WriteToIni(), "provided_computed.ini",
             _finalActualProvidedMani.WriteToIni(), "provided_actual.ini"
+            //note: both compressed hashes and byteranges must be exactly equal!
         );
 
         //check: all files previously available are still available, if we take reduced zips into account
         for (int i = 0; i < _initialProvidedMani.size(); i++) {
-            const ProvidedFile &oldFile = _initialProvidedMani[i];
+            const FileMetainfo &oldFile = _initialProvidedMani[i];
             bool available = false;
             for (int j = 0; j < _finalComputedProvidedMani.size() && !available; j++) {
-                const ProvidedFile &newFile = _finalComputedProvidedMani[j];
+                const FileMetainfo &newFile = _finalComputedProvidedMani[j];
                 if (oldFile.compressedHash == newFile.compressedHash)
                     available = true;
             }

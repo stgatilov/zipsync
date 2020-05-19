@@ -33,11 +33,6 @@ stdext::path GetTempDir() {
 }
 
 
-
-TEST_CASE("FuzzTemp") {
-    Fuzz((GetTempDir()).string());
-}
-
 TEST_CASE("PathAR::IsHttp") {
     CHECK(PathAR::IsHttp("http://darkmod.taaaki.za.net/release") == true);
     CHECK(PathAR::IsHttp("http://tdmcdn.azureedge.net/") == true);
@@ -539,4 +534,10 @@ TEST_CASE("UpdateProcess::DevelopPlan") {
             }
         }
     }
+}
+
+TEST_CASE("FuzzTemp"
+    * doctest::skip()
+) {
+    Fuzz((GetTempDir()).string());
 }

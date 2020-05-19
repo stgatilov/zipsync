@@ -6,27 +6,18 @@
     <DisplayString IncludeView="simple">{((uint64_t*)_data)[0],x}...</DisplayString>
   </Type>
   
-  <Type Name="ZipSync::TargetFile">
-    <DisplayString>T {zipPath.rel} || {filename} in {package}: {contentsHash,view(simple)}</DisplayString>
-  </Type>
-  <Type Name="ZipSync::ProvidedFile">
-    <DisplayString>P {zipPath.rel} || {filename} in {location}: {contentsHash,view(simple)}</DisplayString>
+  <Type Name="ZipSync::FileMetainfo">
+    <DisplayString>T {zipPath.rel} || {filename} in {location}: {contentsHash,view(simple)}</DisplayString>
   </Type>
   
-  <Type Name="ZipSync::TargetManifest">
-    <DisplayString>TM {_comment}: {_files}</DisplayString>
-    <Expand>
-      <ExpandedItem>_files</ExpandedItem>
-    </Expand>
-  </Type>
-  <Type Name="ZipSync::ProvidedManifest">
-    <DisplayString>PM {_comment}: {_files}</DisplayString>
+  <Type Name="ZipSync::Manifest">
+    <DisplayString>Manifest {_comment}: {_files}</DisplayString>
     <Expand>
       <ExpandedItem>_files</ExpandedItem>
     </Expand>
   </Type>
 
-  <Type Name="ZipSync::IndexIterator&lt;*,*&gt;">
+  <Type Name="ZipSync::ManifestIter">
     <Expand>
       <ExpandedItem>_manifest->_files._Mypair._Myval2._Myfirst + _index</ExpandedItem>
     </Expand>
