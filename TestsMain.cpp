@@ -34,30 +34,39 @@ stdext::path GetTempDir() {
 }
 
 
-TEST_CASE("PathAR::IsHttp") {
+TEST_CASE("Paths") {
     CHECK(PathAR::IsHttp("http://darkmod.taaaki.za.net/release") == true);
     CHECK(PathAR::IsHttp("http://tdmcdn.azureedge.net/") == true);
     CHECK(PathAR::IsHttp("C:\\TheDarkMod\\darkmod_207") == false);
     CHECK(PathAR::IsHttp("darkmod_207") == false);
     CHECK(PathAR::IsHttp("/usr/bin/darkmod_207") == false);
-}
 
-TEST_CASE("PathAR::From[Abs|Rel]") {
     const char *cases[][3] = {
         {"tdm_shared_stuff.zip", "C:/TheDarkMod/darkmod_207", "C:/TheDarkMod/darkmod_207/tdm_shared_stuff.zip"},
         {"tdm_shared_stuff.zip", "C:/TheDarkMod/darkmod_207/", "C:/TheDarkMod/darkmod_207/tdm_shared_stuff.zip"},
         {"a/b/c/x.pk4", "C:/TheDarkMod/darkmod_207/", "C:/TheDarkMod/darkmod_207/a/b/c/x.pk4"},
         {"tdm_shared_stuff.zip", "http://tdmcdn.azureedge.net/", "http://tdmcdn.azureedge.net/tdm_shared_stuff.zip"},
-        {"a/b/c/x.pk4", "http://tdmcdn.azureedge.net/", "http://tdmcdn.azureedge.net/a/b/c/x.pk4"}
+        {"a/b/c/x.pk4", "http://tdmcdn.azureedge.net/", "http://tdmcdn.azureedge.net/a/b/c/x.pk4"},
+        {"linux_exe.zip", "/export/home/stgatilov", "/export/home/stgatilov/linux_exe.zip"}
     };
     for (int i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        CHECK(PathAR::IsAbsolute(cases[i][0]) == false);
+        CHECK(PathAR::IsAbsolute(cases[i][1]) == true);
+        CHECK(PathAR::IsAbsolute(cases[i][2]) == true);
         PathAR a = PathAR::FromRel(cases[i][0], cases[i][1]);
         PathAR b = PathAR::FromAbs(cases[i][2], cases[i][1]);
         CHECK(a.rel == cases[i][0]);
         CHECK(a.abs == cases[i][2]);
         CHECK(b.rel == cases[i][0]);
         CHECK(b.abs == cases[i][2]);
+        std::string rootDir = cases[i][1];
+        if (rootDir.back() == '/')
+            rootDir.pop_back();
+        CHECK(a.GetRootDir() == rootDir);
+        CHECK(b.GetRootDir() == rootDir);
     }
+
+    CHECK(PrefixFile("C:/TheDarkMod/stuff.zip", "__prefix__") == "C:/TheDarkMod/__prefix__stuff.zip");
 }
 
 HashDigest GenHash(int idx) {
