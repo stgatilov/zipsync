@@ -208,6 +208,35 @@ TEST_CASE("TargetManifest: Read/Write") {
     }
 }
 
+TEST_CASE("Ini: Read/Write") {
+    IniData ini;
+    for (int i = 0; i < 5; i++) {
+        IniSect sec;
+        sec.emplace_back("index", std::to_string(i));
+        sec.emplace_back("square", std::to_string(i*i));
+        sec.emplace_back("index", std::to_string(i));
+        sec.emplace_back("custom" + std::to_string(i*10), "10 x number");
+        sec.emplace_back("index", std::to_string(i));
+        ini.emplace_back("sec" + std::to_string(i), std::move(sec));
+    }
+
+    stdext::create_directories(GetTempDir());
+    std::string testpath = (GetTempDir() / stdext::path("test.ini")).string();
+    std::string testpathz = (GetTempDir() / stdext::path("test.iniz")).string();
+    WriteIniFile(testpath.c_str(), ini, IniMode::Auto);
+    WriteIniFile(testpathz.c_str(), ini, IniMode::Auto);
+
+    IniData unpacked = ReadIniFile(testpath.c_str());
+    IniData packed = ReadIniFile(testpathz.c_str());
+    CHECK(unpacked == ini);
+    CHECK(packed == ini);
+
+    REQUIRE(IfFileExists(testpath));
+    REQUIRE(IfFileExists(testpathz));
+    CHECK_THROWS(UnzFileHolder(testpath.c_str()));
+    UnzFileHolder zf(testpathz.c_str());
+}
+
 TEST_CASE("AppendManifestsFromLocalZip") {
     std::string rootDir = GetTempDir().string();
     std::string zipPath1 = (GetTempDir() / stdext::path("a/f1.zip")).string();
