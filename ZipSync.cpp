@@ -537,7 +537,7 @@ public:
                 continue;   //no targets, no need to remove
             if (zip._matchIds.empty())
                 continue;   //minizip doesn't support empty zip
-            if (zip._repacked && zip._reduced)
+            if (zip._repacked)
                 continue;   //renamed in ProcessZipsWithoutRepacking
             RepackZip(zip);
             AnalyzeRepackedZip(zip);
