@@ -211,18 +211,14 @@ void CommandNormalize(args::Subparser &parser) {
 void CommandAnalyze(args::Subparser &parser) {
     args::ValueFlag<std::string> argRootDir(parser, "root", "Manifests would contain paths relative to this root directory\n"
         "(all relative paths are based from the root directory)", {'r', "root"}, args::Options::Required);
-    args::ValueFlag<std::string> argTargetMani(parser, "trgMani", "Path where Target manifest would be written", {'t', "target"}, "target.iniz");
-    args::ValueFlag<std::string> argProvidedMani(parser, "provMani", "Path where Provided manifest would be written", {'p', "provided"}, "provided.iniz");
-    args::Flag argNoTarget(parser, "notarget", "Do not generate Target manifest", {"no-target"});
-    args::Flag argNoProvided(parser, "noprovided", "Do not generate Provided manifest", {"no-provided"});
+    args::ValueFlag<std::string> argManifest(parser, "mani", "Path where full manifest would be written", {'m', "mani"}, "manifest.iniz");
     args::ValueFlag<int> argThreads(parser, "threads", "Use this number of parallel threads to accelerate analysis (0 = max)", {'j', "threads"}, 1);
     args::PositionalList<std::string> argZips(parser, "zips", "List of files or globs specifying which zips in root directory to include");
     args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"}, args::Options::HiddenFromDescription);
     parser.Parse();
 
     std::string root = NormalizeSlashes(argRootDir.Get());
-    std::string targetManiPath = GetPath(argTargetMani.Get(), root);
-    std::string providManiPath = GetPath(argProvidedMani.Get(), root);
+    std::string maniPath = GetPath(argManifest.Get(), root);
     std::vector<std::string> zipPaths = CollectFilePaths(argZips.Get(), root);
     int threadsNum = argThreads.Get();
 
@@ -231,8 +227,7 @@ void CommandAnalyze(args::Subparser &parser) {
         totalSize += SizeOfFile(zip);
     printf("Going to analyze %d zips in %s of total size %0.3lf MB in %d threads\n", int(zipPaths.size()), root.c_str(), totalSize * 1e-6, threadsNum);
 
-    std::vector<ZipSync::ProvidedManifest> providManis(zipPaths.size());
-    std::vector<ZipSync::TargetManifest> targetManis(zipPaths.size());
+    std::vector<ZipSync::Manifest> zipManis(zipPaths.size());
     {
         ProgressIndicator progress;
         std::mutex mutex;
@@ -242,7 +237,7 @@ void CommandAnalyze(args::Subparser &parser) {
                 std::lock_guard<std::mutex> lock(mutex);
                 progress.Update(doneSize / totalSize, "Analysing \"" + zipPath + "\"...");
             }
-            ZipSync::AppendManifestsFromLocalZip(zipPath, root, ZipSync::ProvidedLocation::Local, "", providManis[index], targetManis[index]);
+            zipManis[index].AppendLocalZip(zipPath, root, "");
             {
                 std::lock_guard<std::mutex> lock(mutex);
                 doneSize += SizeOfFile(zipPath);
@@ -252,18 +247,10 @@ void CommandAnalyze(args::Subparser &parser) {
         progress.Update(1.0, "Analysing done");
     }
 
-    if (!argNoTarget) {
-        ZipSync::TargetManifest targetMani;
-        for (const auto &tm : targetManis)
-            targetMani.AppendManifest(tm);
-        ZipSync::WriteIniFile(targetManiPath.c_str(), targetMani.WriteToIni());
-    }
-    if (!argNoProvided) {
-        ZipSync::ProvidedManifest providMani;
-        for (const auto &pm : providManis)
-            providMani.AppendManifest(pm);
-        ZipSync::WriteIniFile(providManiPath.c_str(), providMani.WriteToIni());
-    }
+    ZipSync::Manifest manifest;
+    for (const auto &tm : zipManis)
+        manifest.AppendManifest(tm);
+    ZipSync::WriteIniFile(maniPath.c_str(), manifest.WriteToIni());
 }
 
 int main(int argc, char **argv) {
