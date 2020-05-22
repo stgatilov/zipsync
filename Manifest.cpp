@@ -125,7 +125,6 @@ void Manifest::AppendLocalZip(const std::string &zipPath, const std::string &roo
 
 void Manifest::AppendManifest(const Manifest &other) {
     AppendVector(_files, other._files);
-    _canBeTarget = _canBeTarget || other._canBeTarget;
 }
 
 IniData Manifest::WriteToIni() const {

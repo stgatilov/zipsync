@@ -118,9 +118,6 @@ class Manifest {
     //arbitrary text attached to the manifest (only for debugging)
     std::string _comment;
 
-    //if set to false, then update to this state makes no sense
-    bool _canBeTarget = true;
-
     //the set of files described by this manifest
     std::vector<FileMetainfo> _files;
 
