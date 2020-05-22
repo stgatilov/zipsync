@@ -173,6 +173,21 @@ void ParallelFor(int from, int to, const std::function<void(int)> &body, int thr
     }
 }
 
+double TotalProvidedCompressedSize(const ZipSync::Manifest &mani) {
+    double size = 0.0;
+    for (int i = 0; i < mani.size(); i++)
+        if (mani[i].location != ZipSync::FileLocation::Nowhere)
+            size += mani[i].props.compressedSize;
+    return size;
+}
+int TotalProvidedCount(const ZipSync::Manifest &mani) {
+    int cnt = 0;
+    for (int i = 0; i < mani.size(); i++)
+        if (mani[i].location != ZipSync::FileLocation::Nowhere)
+            cnt++;
+    return cnt;
+}
+
 void CommandNormalize(args::Subparser &parser) {
     args::ValueFlag<std::string> argRootDir(parser, "root", "Relative paths to zips are based from this directory", {'r', "root"});
     args::PositionalList<std::string> argZips(parser, "zips", "List of files or globs specifying which zips in root directory to include");
@@ -283,10 +298,16 @@ void CommandDiff(args::Subparser &parser) {
 
     ZipSync::Manifest fullMani;
     fullMani.ReadFromIni(ZipSync::ReadIniFile(maniPath.c_str()), root);
+    printf("Subtracting from %s containing %d files of size %0.3lf MB:\n", 
+        maniPath.c_str(), TotalProvidedCount(fullMani), TotalProvidedCompressedSize(fullMani) * 1e-6
+    );
     std::set<ZipSync::HashDigest> subtractedHashes;
     for (std::string path : argSubtractedMani.Get()) {
         ZipSync::Manifest mani;
         mani.ReadFromIni(ZipSync::ReadIniFile(path.c_str()), root);
+        printf("   %s containing %d files of size %0.3lf MB\n", 
+            path.c_str(), TotalProvidedCount(mani), TotalProvidedCompressedSize(mani) * 1e-6
+        );
         for (int i = 0; i < mani.size(); i++)
             subtractedHashes.insert(mani[i].compressedHash);
     }
@@ -300,6 +321,9 @@ void CommandDiff(args::Subparser &parser) {
         else
             filteredMani.AppendFile(pf);
     }
+    printf("Result will be written to %s containing %d files of size %0.3lf MB\n", 
+        outRoot.c_str(), TotalProvidedCount(filteredMani), TotalProvidedCompressedSize(filteredMani) * 1e-6
+    );
 
     ZipSync::UpdateProcess update;
     update.Init(filteredMani, filteredMani, outRoot);
@@ -315,6 +339,7 @@ void CommandDiff(args::Subparser &parser) {
         pf.DontProvide();
         fullMani.AppendFile(pf);
     }
+    printf("Saving manifest of the diff to %s\n", outManiPath.c_str());
     ZipSync::WriteIniFile(outManiPath.c_str(), fullMani.WriteToIni());
 }
 
