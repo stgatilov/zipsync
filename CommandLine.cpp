@@ -5,6 +5,7 @@
 #include "Wildcards.h"
 #include <thread>
 #include <mutex>
+#include <map>
 
 
 #include <filesystem>
@@ -211,7 +212,7 @@ void CommandNormalize(args::Subparser &parser) {
 void CommandAnalyze(args::Subparser &parser) {
     args::ValueFlag<std::string> argRootDir(parser, "root", "Manifests would contain paths relative to this root directory\n"
         "(all relative paths are based from the root directory)", {'r', "root"}, args::Options::Required);
-    args::ValueFlag<std::string> argManifest(parser, "mani", "Path where full manifest would be written", {'m', "mani"}, "manifest.iniz");
+    args::ValueFlag<std::string> argManifest(parser, "mani", "Path where full manifest would be written", {'m', "manifest"}, "manifest.iniz");
     args::ValueFlag<int> argThreads(parser, "threads", "Use this number of parallel threads to accelerate analysis (0 = max)", {'j', "threads"}, 1);
     args::PositionalList<std::string> argZips(parser, "zips", "List of files or globs specifying which zips in root directory to include");
     args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"}, args::Options::HiddenFromDescription);
@@ -253,6 +254,65 @@ void CommandAnalyze(args::Subparser &parser) {
     ZipSync::WriteIniFile(maniPath.c_str(), manifest.WriteToIni());
 }
 
+void CommandDiff(args::Subparser &parser) {
+    args::ValueFlag<std::string> argRootDir(parser, "root", "The set of zips is located in this root directory\n"
+        "(all relative paths are based from it)", {'r', "root"});
+    args::ValueFlag<std::string> argManifest(parser, "mani", "Path to provided manifest of the zips set", {'m', "manifest"}, "manifest.iniz");
+    args::ValueFlagList<std::string> argSubtractedMani(parser, "subMani", "Paths or URLs of provided manifests being subtracted", {'s', "subtract"}, {}, args::Options::Required);
+    args::ValueFlag<std::string> argOutDir(parser, "output", "Difference zips and manifests will be written to this directory", {'o', "output"}, args::Options::Required);
+    args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"}, args::Options::HiddenFromDescription);
+    parser.Parse();
+
+    std::string root = GetCwd();
+    if (argRootDir)
+        root = argRootDir.Get();
+    root = NormalizeSlashes(root);
+    std::string outRoot = root;
+    if (argOutDir) {
+        outRoot = argOutDir.Get();
+    }
+    outRoot = NormalizeSlashes(outRoot);
+    std::string maniPath = GetPath(argManifest.Get(), root);
+    std::string outManiPath = GetPath(argManifest.Get(), outRoot);
+    if (EnumerateFilesInDirectory(outRoot).size() > 0)
+        throw std::runtime_error("Output directory is not empty: " + outRoot);
+
+    ZipSync::Manifest fullMani;
+    fullMani.ReadFromIni(ZipSync::ReadIniFile(maniPath.c_str()), root);
+    std::set<ZipSync::HashDigest> subtractedHashes;
+    for (std::string path : argSubtractedMani.Get()) {
+        ZipSync::Manifest mani;
+        mani.ReadFromIni(ZipSync::ReadIniFile(path.c_str()), root);
+        for (int i = 0; i < mani.size(); i++)
+            subtractedHashes.insert(mani[i].compressedHash);
+    }
+
+    ZipSync::Manifest filteredMani;
+    ZipSync::Manifest subtractedMani;
+    for (int i = 0; i < fullMani.size(); i++) {
+        auto &pf = fullMani[i];
+        if (subtractedHashes.count(pf.compressedHash))
+            subtractedMani.AppendFile(pf);
+        else
+            filteredMani.AppendFile(pf);
+    }
+
+    ZipSync::UpdateProcess update;
+    update.Init(filteredMani, filteredMani, outRoot);
+    bool ok = update.DevelopPlan(ZipSync::UpdateType::SameCompressed);
+    if (!ok)
+        throw std::runtime_error("Internal error: DevelopPlan failed");
+    update.RepackZips();
+    filteredMani = update.GetProvidedManifest();
+
+    for (int i = 0; i < subtractedMani.size(); i++) {
+        auto &pf = subtractedMani[i];
+        pf.DontProvide();
+        filteredMani.AppendFile(pf);
+    }
+    ZipSync::WriteIniFile(outManiPath.c_str(), filteredMani.WriteToIni());
+}
+
 int main(int argc, char **argv) {
     args::ArgumentParser parser("ZipSync command line tool.");
     parser.helpParams.programName = "zipsync";
@@ -262,6 +322,7 @@ int main(int argc, char **argv) {
     args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"});
     args::Command analyze(parser, "analyze", "Create manifests for specified set of zips (on local machine)", CommandAnalyze);
     args::Command normalize(parser, "normalize", "Normalize specified set of zips (on local machine)", CommandNormalize);
+    args::Command diff(parser, "diff", "Remove files available in given manifests from the set of zips", CommandDiff);
     try {
         parser.ParseCLI(argc, argv);
     }
