@@ -307,14 +307,15 @@ void CommandDiff(args::Subparser &parser) {
     if (!ok)
         throw std::runtime_error("Internal error: DevelopPlan failed");
     update.RepackZips();
-    filteredMani = update.GetProvidedManifest();
+    ZipSync::Manifest provMani = update.GetProvidedManifest();
 
+    fullMani = provMani.Filter([](const auto &f) { return f.location == ZipSync::FileLocation::Inplace; });
     for (int i = 0; i < subtractedMani.size(); i++) {
         auto &pf = subtractedMani[i];
         pf.DontProvide();
-        filteredMani.AppendFile(pf);
+        fullMani.AppendFile(pf);
     }
-    ZipSync::WriteIniFile(outManiPath.c_str(), filteredMani.WriteToIni());
+    ZipSync::WriteIniFile(outManiPath.c_str(), fullMani.WriteToIni());
 }
 
 int main(int argc, char **argv) {

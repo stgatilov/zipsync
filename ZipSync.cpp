@@ -361,7 +361,7 @@ public:
             FileMetainfo metaNew;
             metaNew.zipPath = PathAR::FromAbs(zip._zipPathRepacked, _owner._rootDir);
             metaNew.location = FileLocation::Repacked;
-            metaNew.package = "[repacked]";
+            metaNew.package = m.target->package;
             metaNew.contentsHash = m.provided->contentsHash;
             metaNew.compressedHash = m.provided->compressedHash;   //will be recomputed if needsRehashCompressed
             AnalyzeCurrentFile(zf, metaNew, false, needsRehashCompressed);
@@ -451,6 +451,7 @@ public:
                     for (int i = 0; i < copiedFiles.size(); i++) {
                         FileMetainfo pf;
                         AnalyzeCurrentFile(zf, pf, false, false);
+                        pf.package = copiedFiles[i].package;
                         pf.zipPath = PathAR::FromAbs(zip._zipPathReduced, _owner._rootDir);
                         pf.location = FileLocation::Reduced;
                         pf.contentsHash = copiedFiles[i].contentsHash;
