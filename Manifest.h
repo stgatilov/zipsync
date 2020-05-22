@@ -102,6 +102,7 @@ struct FileMetainfo {
 
     static bool IsLess_ByZip(const FileMetainfo &a, const FileMetainfo &b);
     void Nullify();
+    void DontProvide();
 };
 
 /**

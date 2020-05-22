@@ -7,7 +7,7 @@
   </Type>
   
   <Type Name="ZipSync::FileMetainfo">
-    <DisplayString>T {zipPath.rel} || {filename} in {location}: {contentsHash,view(simple)}</DisplayString>
+    <DisplayString>{zipPath.rel} || {filename} in {location}: {contentsHash,view(simple)}</DisplayString>
   </Type>
   
   <Type Name="ZipSync::Manifest">

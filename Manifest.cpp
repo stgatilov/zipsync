@@ -17,11 +17,16 @@ bool FileMetainfo::IsLess_ByZip(const FileMetainfo &a, const FileMetainfo &b) {
 }
 
 void FileMetainfo::Nullify() {
-    compressedHash.Clear();
-    contentsHash.Clear();
     byterange[0] = byterange[1] = 0;
     location = FileLocation::Nowhere;
+    compressedHash.Clear();
+    contentsHash.Clear();
     memset(&props, 0, sizeof(props));
+}
+
+void FileMetainfo::DontProvide() {
+    byterange[0] = byterange[1] = 0;
+    location = FileLocation::Nowhere;
 }
 
 
