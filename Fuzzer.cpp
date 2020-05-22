@@ -9,6 +9,7 @@
 #include "ZSAssert.h"
 #include "ZipSync.h"
 #include <zip.h>
+#include <functional>
 
 
 namespace ZipSync {
