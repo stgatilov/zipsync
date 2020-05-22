@@ -415,21 +415,27 @@ public:
                     unz_file_info info;
                     char filename[SIZE_PATH];
                     SAFE_CALL(unzGetCurrentFileInfo(zf, &info, filename, sizeof(filename), NULL, 0, NULL, 0));
-                    ZipSyncAssertF(found, "Provided manifest of %s doesn't have file %s", zip._zipPath.c_str(), filename);
-                    int &usedCnt = _hashProvidedCnt.at(found->compressedHash);
-                    if (usedCnt == 1) {
-                        //not available otherwise -> repack
-                        minizipCopyFile(zf, zfOut,
-                            filename,
-                            info.compression_method, info.flag,
-                            info.internal_fa, info.external_fa, info.dosDate,
-                            true, info.crc, info.uncompressed_size
-                        );
-                        copiedFiles.push_back(*found);
+                    if (found) {
+                        int &usedCnt = _hashProvidedCnt.at(found->compressedHash);
+                        if (usedCnt == 1) {
+                            //not available otherwise -> repack
+                            minizipCopyFile(zf, zfOut,
+                                filename,
+                                info.compression_method, info.flag,
+                                info.internal_fa, info.external_fa, info.dosDate,
+                                true, info.crc, info.uncompressed_size
+                            );
+                            copiedFiles.push_back(*found);
+                        }
+                        else {
+                            //drop it: it will still be available
+                            usedCnt--;
+                        }
                     }
                     else {
-                        //drop it: it will still be available
-                        usedCnt--;
+                        //not present in provided manifests, but in managed zip -> drop it
+                        //note that this file gets completely lost at this moment!
+                        found.get();    //nop
                     }
                     int res = unzGoToNextFile(zf);
                     if (res == UNZ_END_OF_LIST_OF_FILE)
