@@ -235,9 +235,9 @@ void CommandNormalize(args::Subparser &parser) {
 void CommandAnalyze(args::Subparser &parser) {
     args::ValueFlag<std::string> argRootDir(parser, "root", "Manifests would contain paths relative to this root directory\n"
         "(all relative paths are based from the root directory)", {'r', "root"}, args::Options::Required);
-    args::ValueFlag<std::string> argManifest(parser, "mani", "Path where full manifest would be written", {'m', "manifest"}, "manifest.iniz");
+    args::ValueFlag<std::string> argManifest(parser, "mani", "Path where full manifest would be written (default: manifest.iniz)", {'m', "manifest"}, "manifest.iniz");
     args::ValueFlag<int> argThreads(parser, "threads", "Use this number of parallel threads to accelerate analysis (0 = max)", {'j', "threads"}, 1);
-    args::PositionalList<std::string> argZips(parser, "zips", "List of files or globs specifying which zips in root directory to include");
+    args::PositionalList<std::string> argZips(parser, "zips", "List of files or globs specifying which zips in root directory to analyze");
     args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"}, args::Options::HiddenFromDescription);
     parser.Parse();
 
@@ -281,7 +281,7 @@ void CommandDiff(args::Subparser &parser) {
     args::ValueFlag<std::string> argRootDir(parser, "root", "The set of zips is located in this root directory\n"
         "(all relative paths are based from it)", {'r', "root"});
     args::ValueFlag<std::string> argManifest(parser, "mani", "Path to provided manifest of the zips set", {'m', "manifest"}, "manifest.iniz");
-    args::ValueFlagList<std::string> argSubtractedMani(parser, "subMani", "Paths or URLs of provided manifests being subtracted", {'s', "subtract"}, {}, args::Options::Required);
+    args::ValueFlagList<std::string> argSubtractedMani(parser, "subm", "Paths or URLs of provided manifests being subtracted", {'s', "subtract"}, {}, args::Options::Required);
     args::ValueFlag<std::string> argOutDir(parser, "output", "Difference zips and manifests will be written to this directory", {'o', "output"}, args::Options::Required);
     args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"}, args::Options::HiddenFromDescription);
     parser.Parse();
@@ -291,9 +291,8 @@ void CommandDiff(args::Subparser &parser) {
         root = argRootDir.Get();
     root = NormalizeSlashes(root);
     std::string outRoot = root;
-    if (argOutDir) {
+    if (argOutDir)
         outRoot = argOutDir.Get();
-    }
     outRoot = NormalizeSlashes(outRoot);
     std::string maniPath = GetPath(argManifest.Get(), root);
     std::string outManiPath = GetPath(argManifest.Get(), outRoot);
