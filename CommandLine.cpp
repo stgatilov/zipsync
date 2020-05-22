@@ -28,6 +28,9 @@ std::string GetCwd() {
 size_t SizeOfFile(const std::string &path) {
     return fs::file_size(path);
 }
+void CreateDirectories(const std::string &path) {
+    fs::create_directories(path);
+}
 
 std::string NormalizeSlashes(std::string path) {
     for (char &ch : path)
@@ -276,6 +279,7 @@ void CommandDiff(args::Subparser &parser) {
     std::string outManiPath = GetPath(argManifest.Get(), outRoot);
     if (EnumerateFilesInDirectory(outRoot).size() > 0)
         throw std::runtime_error("Output directory is not empty: " + outRoot);
+    CreateDirectories(outRoot);
 
     ZipSync::Manifest fullMani;
     fullMani.ReadFromIni(ZipSync::ReadIniFile(maniPath.c_str()), root);
