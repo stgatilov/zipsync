@@ -6,6 +6,7 @@
 #include <thread>
 #include <mutex>
 #include <map>
+#include <random>
 
 
 #include <filesystem>
@@ -173,18 +174,22 @@ void ParallelFor(int from, int to, const std::function<void(int)> &body, int thr
     }
 }
 
-double TotalProvidedCompressedSize(const ZipSync::Manifest &mani) {
+double TotalCompressedSize(const ZipSync::Manifest &mani, bool providedOnly = true) {
     double size = 0.0;
-    for (int i = 0; i < mani.size(); i++)
-        if (mani[i].location != ZipSync::FileLocation::Nowhere)
-            size += mani[i].props.compressedSize;
+    for (int i = 0; i < mani.size(); i++) {
+        if (providedOnly && mani[i].location == ZipSync::FileLocation::Nowhere)
+            continue;
+        size += mani[i].props.compressedSize;
+    }
     return size;
 }
-int TotalProvidedCount(const ZipSync::Manifest &mani) {
+int TotalCount(const ZipSync::Manifest &mani, bool providedOnly = true) {
     int cnt = 0;
-    for (int i = 0; i < mani.size(); i++)
-        if (mani[i].location != ZipSync::FileLocation::Nowhere)
-            cnt++;
+    for (int i = 0; i < mani.size(); i++) {
+        if (providedOnly && mani[i].location == ZipSync::FileLocation::Nowhere)
+            continue;
+        cnt++;
+    }
     return cnt;
 }
 
@@ -299,14 +304,14 @@ void CommandDiff(args::Subparser &parser) {
     ZipSync::Manifest fullMani;
     fullMani.ReadFromIni(ZipSync::ReadIniFile(maniPath.c_str()), root);
     printf("Subtracting from %s containing %d files of size %0.3lf MB:\n", 
-        maniPath.c_str(), TotalProvidedCount(fullMani), TotalProvidedCompressedSize(fullMani) * 1e-6
+        maniPath.c_str(), TotalCount(fullMani), TotalCompressedSize(fullMani) * 1e-6
     );
     std::set<ZipSync::HashDigest> subtractedHashes;
     for (std::string path : argSubtractedMani.Get()) {
         ZipSync::Manifest mani;
         mani.ReadFromIni(ZipSync::ReadIniFile(path.c_str()), root);
         printf("   %s containing %d files of size %0.3lf MB\n", 
-            path.c_str(), TotalProvidedCount(mani), TotalProvidedCompressedSize(mani) * 1e-6
+            path.c_str(), TotalCount(mani), TotalCompressedSize(mani) * 1e-6
         );
         for (int i = 0; i < mani.size(); i++)
             subtractedHashes.insert(mani[i].compressedHash);
@@ -322,7 +327,7 @@ void CommandDiff(args::Subparser &parser) {
             filteredMani.AppendFile(pf);
     }
     printf("Result will be written to %s containing %d files of size %0.3lf MB\n", 
-        outRoot.c_str(), TotalProvidedCount(filteredMani), TotalProvidedCompressedSize(filteredMani) * 1e-6
+        outRoot.c_str(), TotalCount(filteredMani), TotalCompressedSize(filteredMani) * 1e-6
     );
 
     ZipSync::UpdateProcess update;
@@ -343,6 +348,90 @@ void CommandDiff(args::Subparser &parser) {
     ZipSync::WriteIniFile(outManiPath.c_str(), fullMani.WriteToIni());
 }
 
+void CommandUpdate(args::Subparser &parser) {
+    args::ValueFlag<std::string> argRootDir(parser, "root", "The update should create/update the set of zips in this root directory\n"
+        "(all relative paths are based from the root directory)", {'r', "root"}, args::Options::Required);
+    args::ValueFlag<std::string> argTargetMani(parser, "trgMani", "Path to the target manifest to update to", {'t', "target"}, "manifest.iniz", args::Options::Required);
+    args::ValueFlagList<std::string> argProvidedMani(parser, "provMani", "Path to additional provided manifests describing where to take files from", {'p', "provided"}, {});
+    args::PositionalList<std::string> argManagedZips(parser, "managed", "List of files or globs specifying which zips must be updated");
+    args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"}, args::Options::HiddenFromDescription);
+    parser.Parse();
+
+    std::string root = NormalizeSlashes(argRootDir.Get());
+    std::string targetManiPath = GetPath(argTargetMani.Get(), root);
+    std::vector<std::string> providManiPaths = CollectFilePaths(argProvidedMani.Get(), root);
+    std::vector<std::string> managedZips = CollectFilePaths(argManagedZips.Get(), root);
+    CreateDirectories(root);
+
+    ZipSync::Manifest targetManifest;
+    ZipSync::Manifest providedManifest;
+    targetManifest.ReadFromIni(ZipSync::ReadIniFile(targetManiPath.c_str()), root);
+    printf("Updating directory %s to target %s with %d files of size %0.3lf MB\n",
+        root.c_str(), targetManiPath.c_str(), TotalCount(targetManifest, false), TotalCompressedSize(targetManifest, false) * 1e-6
+    );
+    printf("Provided manifests:\n");
+    {
+        std::string srcDir = NormalizeSlashes(fs::path(targetManiPath).parent_path().string());
+        ZipSync::Manifest m = targetManifest.Filter([](const auto &f) { return f.location != ZipSync::FileLocation::Nowhere; });
+        m.ReRoot(srcDir);
+        printf("  %s containing %d files of size %0.3lf MB\n",
+            targetManiPath.c_str(), TotalCount(m), TotalCompressedSize(m) * 1e-6
+        );
+        providedManifest.AppendManifest(m);
+    }
+    for (std::string mpath : providManiPaths) {
+        std::string dir = NormalizeSlashes(fs::path(mpath).parent_path().string());
+        ZipSync::Manifest m;
+        m.ReadFromIni(ZipSync::ReadIniFile(mpath.c_str()), dir);
+        m = m.Filter([](const auto &f) { return f.location != ZipSync::FileLocation::Nowhere; });
+        printf("  %s containing %d files of size %0.3lf MB\n",
+            mpath.c_str(), TotalCount(m), TotalCompressedSize(m) * 1e-6
+        );
+        providedManifest.AppendManifest(m);
+    }
+
+    ZipSync::UpdateProcess update;
+    update.Init(targetManifest, providedManifest, root);
+    if (managedZips.size())
+        printf("Managing %d zip files\n", (int)managedZips.size());
+    for (int i = 0; i < managedZips.size(); i++)
+        update.AddManagedZip(managedZips[i]);
+    bool ok = update.DevelopPlan(ZipSync::UpdateType::SameCompressed);
+    if (!ok) {
+        int n = update.MatchCount();
+        std::vector<ZipSync::ManifestIter> misses;
+        for (int i = 0; i < n; i++) {
+            const auto &m = update.GetMatch(i);
+            if (!m.provided)
+                misses.push_back(m.target);
+        }
+        std::shuffle(misses.begin(), misses.end(), std::mt19937(time(0)));
+        n = misses.size();
+        int k = std::min(n, 10);
+        printf("Here are some of the missing files (%d out of %d):\n", k, n);
+        for (int i = 0; i < k; i++) {
+            printf("  %s||%s of size = %d/%d with hash = %s/%s\n",
+                misses[i]->zipPath.rel.c_str(),
+                misses[i]->filename.c_str(),
+                misses[i]->props.compressedSize,
+                misses[i]->props.contentsSize,
+                misses[i]->compressedHash.Hex().c_str(),
+                misses[i]->contentsHash.Hex().c_str()
+            );
+        }
+        throw std::runtime_error("DevelopPlan failed: provided manifests not enough");
+    }
+    printf("Update plan developed, repacking\n");
+
+    update.RepackZips();
+    ZipSync::Manifest provMani = update.GetProvidedManifest();
+
+    provMani = provMani.Filter([](const auto &f) { return f.location == ZipSync::FileLocation::Inplace; });
+    std::string resManiPath = GetPath("result.iniz", root);
+    printf("Saving resulting manifest to %s\n", resManiPath.c_str());
+    ZipSync::WriteIniFile(resManiPath.c_str(), provMani.WriteToIni());
+}
+
 int main(int argc, char **argv) {
     args::ArgumentParser parser("ZipSync command line tool.");
     parser.helpParams.programName = "zipsync";
@@ -353,6 +442,7 @@ int main(int argc, char **argv) {
     args::Command analyze(parser, "analyze", "Create manifests for specified set of zips (on local machine)", CommandAnalyze);
     args::Command normalize(parser, "normalize", "Normalize specified set of zips (on local machine)", CommandNormalize);
     args::Command diff(parser, "diff", "Remove files available in given manifests from the set of zips", CommandDiff);
+    args::Command update(parser, "update", "Perform update of the set of zips to specified target", CommandUpdate);
     try {
         parser.ParseCLI(argc, argv);
     }
