@@ -426,7 +426,7 @@ void CommandUpdate(args::Subparser &parser) {
     ZipSync::Manifest provMani = update.GetProvidedManifest();
 
     provMani = provMani.Filter([](const auto &f) { return f.location == ZipSync::FileLocation::Inplace; });
-    std::string resManiPath = GetPath("result.iniz", root);
+    std::string resManiPath = GetPath("manifest.iniz", root);
     printf("Saving resulting manifest to %s\n", resManiPath.c_str());
     ZipSync::WriteIniFile(resManiPath.c_str(), provMani.WriteToIni());
 }
