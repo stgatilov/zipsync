@@ -6,6 +6,7 @@
 #include "Path.h"
 #include <tuple>
 #include <map>
+#include <functional>
 
 #include "minizip_extra.h"
 
@@ -202,6 +203,14 @@ void Manifest::ReRoot(const std::string &rootDir) {
     for (FileMetainfo &filemeta : _files) {
         filemeta.zipPath = PathAR::FromRel(filemeta.zipPath.rel, rootDir);
     }
+}
+
+Manifest Manifest::Filter(const std::function<bool(const FileMetainfo&)> &ifCopy) const {
+    Manifest res;
+    for (int i = 0; i < _files.size(); i++)
+        if (ifCopy(_files[i]))
+            res.AppendFile(_files[i]);
+    return res;
 }
 
 }

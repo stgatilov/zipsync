@@ -7,6 +7,9 @@
 #include "Ini.h"
 #include "ZipUtils.h"
 
+namespace std {
+    template<class Func> class function;
+}
 
 namespace ZipSync {
 
@@ -138,6 +141,7 @@ public:
     IniData WriteToIni() const;
 
     void ReRoot(const std::string &rootDir);
+    Manifest Filter(const std::function<bool(const FileMetainfo&)> &ifCopy) const;
 };
 
 /**

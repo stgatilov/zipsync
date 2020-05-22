@@ -16,14 +16,6 @@ namespace ZipSync {
 typedef std::uniform_int_distribution<int> IntD;
 typedef std::uniform_real_distribution<double> DblD;
 
-template<class Lambda> Manifest FilterManifest(const Manifest &srcMani, const Lambda &ifCopy) {
-    Manifest res;
-    for (int i = 0; i < srcMani.size(); i++)
-        if (ifCopy(srcMani[i]))
-            res.AppendFile(srcMani[i]);
-    return res;
-}
-
 //==========================================================================================
 
 class FuzzerGenerator {
@@ -575,7 +567,7 @@ public:
         );
 
         //check: the provided manifest computed by updater exactly represents the current state
-        Manifest inplaceComputedProvidedMani = FilterManifest(_finalComputedProvidedMani, [&](const FileMetainfo &f) {
+        Manifest inplaceComputedProvidedMani = _finalComputedProvidedMani.Filter([&](const FileMetainfo &f) {
             return f.zipPath.GetRootDir() == _rootInplaceDir;
         });
         AssertManifestsSame(
