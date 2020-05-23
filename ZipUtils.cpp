@@ -2,6 +2,7 @@
 #include "Utils.h"
 #include "Path.h"
 #include <algorithm>
+#include "minizip_extra.h"
 
 
 namespace ZipSync {
@@ -135,14 +136,20 @@ void minizipCopyFile(unzFile zf, zipFile zfOut, const char *filename, int method
     info.dosDate = dosDate;
     int level = CompressionLevelFromGpFlags(flags);
     SAFE_CALL(zipOpenNewFileInZip2(zfOut, filename, &info, NULL, 0, NULL, 0, NULL, method, level, copyRaw));
-    while (1) {
-        char buffer[SIZE_FILEBUFFER];
-        int bytes = unzReadCurrentFile(zf, buffer, sizeof(buffer));
-        if (bytes < 0)
-            SAFE_CALL(bytes);
-        if (bytes == 0)
-            break;
-        SAFE_CALL(zipWriteInFileInZip(zfOut, buffer, bytes));
+    char buffer[SIZE_FILEBUFFER];
+    if (copyRaw) {
+        //faster than minizip copy: no CRC32 calculation, large buffer
+        minizipCopyDataRaw(zf, zfOut, buffer, sizeof(buffer));
+    }
+    else {
+        while (1) {
+            int bytes = unzReadCurrentFile(zf, buffer, sizeof(buffer));
+            if (bytes < 0)
+                SAFE_CALL(bytes);
+            if (bytes == 0)
+                break;
+            SAFE_CALL(zipWriteInFileInZip(zfOut, buffer, bytes));
+        }
     }
     SAFE_CALL(copyRaw ? zipCloseFileInZipRaw(zfOut, contentsSize, crc) : zipCloseFileInZip(zfOut));
     SAFE_CALL(unzCloseCurrentFile(zf));
