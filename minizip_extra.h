@@ -1,6 +1,7 @@
 #pragma once
 
 #include <unzip.h>
+#include <zip.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -15,6 +16,10 @@ extern int ZEXPORT unzseek64 OF((unzFile file, ZPOS64_T offset, int origin));
 
 extern int ZEXPORT unzIsZip64(unzFile file);
 /* Returns 1 iff specified file is zip64 */
+
+extern int ZEXPORT minizipCopyDataRaw(unzFile srcHandle, zipFile dstHandle, voidp buffer, unsigned bufSize);
+/* Directly copies current file data from unz file to zip file.
+   Both unz and zip file must be opened in raw mode, without any bytes read/written to them. */
 
 #ifdef __cplusplus
 }

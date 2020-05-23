@@ -112,3 +112,49 @@ extern int ZEXPORT unzIsZip64(unzFile file)
         return 0;
     return s->isZip64;
 }
+
+extern int ZEXPORT minizipCopyDataRaw(unzFile srcHandle, zipFile dstHandle, voidp buffer, unsigned bufSize)
+{
+	unz64_s* src = (unz64_s*)srcHandle;
+    zip64_internal* dst = (zip64_internal*)dstHandle;
+
+    if (dst == NULL)
+        return ZIP_PARAMERROR;
+    if (dst->in_opened_file_inzip == 0)
+        return ZIP_PARAMERROR;
+    if (src == NULL)
+        return UNZ_PARAMERROR;
+    if (src->pfile_in_zip_read == NULL)
+        return UNZ_PARAMERROR;
+
+    curfile64_info *dstFile = &dst->ci;
+    file_in_zip64_read_info_s *srcFile = src->pfile_in_zip_read;
+
+    if (srcFile->read_buffer == NULL)
+        return UNZ_END_OF_LIST_OF_FILE;
+    if (!srcFile->raw)
+        return UNZ_PARAMERROR;
+    if (!dstFile->raw)
+        return UNZ_PARAMERROR;
+
+    if (dstFile->pos_in_buffered_data != 0)
+        return UNZ_PARAMERROR;  //buffer must be empty, since we don't know how to flush it
+
+    if (ZSEEK64(srcFile->z_filefunc, srcFile->filestream, srcFile->pos_in_zipfile + srcFile->byte_before_the_zipfile, ZLIB_FILEFUNC_SEEK_SET) != 0)
+        return UNZ_ERRNO;
+    while (srcFile->rest_read_compressed > 0) {
+        uInt numBytesToCopy = bufSize;
+        if (numBytesToCopy > srcFile->rest_read_compressed)
+            numBytesToCopy = srcFile->rest_read_compressed;
+        if (ZREAD64(srcFile->z_filefunc, srcFile->filestream, buffer, numBytesToCopy) != numBytesToCopy)
+            return UNZ_ERRNO;
+        if (ZWRITE64(dst->z_filefunc, dst->filestream, buffer, numBytesToCopy) != numBytesToCopy)
+            return ZIP_ERRNO;
+        dstFile->totalCompressedData += numBytesToCopy;
+        dstFile->totalUncompressedData += numBytesToCopy;
+        srcFile->pos_in_zipfile += numBytesToCopy;
+        srcFile->rest_read_compressed -= numBytesToCopy;
+    }
+
+    return UNZ_OK;
+}
