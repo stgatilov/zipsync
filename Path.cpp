@@ -74,6 +74,18 @@ std::string PrefixFile(std::string absPath, std::string prefix) {
     return absPath;
 }
 
+std::string GetDirPath(std::string somePath) {
+    size_t pos = somePath.find_last_of('/');
+    ZipSyncAssert(pos != std::string::npos);
+    return somePath.substr(0, pos);
+}
+std::string GetFilename(std::string somePath) {
+    size_t pos = somePath.find_last_of('/');
+    ZipSyncAssert(pos != std::string::npos);
+    ZipSyncAssert(pos + 1 < somePath.size());
+    return somePath.substr(pos + 1);
+}
+
 std::string GetFullPath(const std::string &zipPath, const std::string &filename) {
     return zipPath + "||" + filename;
 }
