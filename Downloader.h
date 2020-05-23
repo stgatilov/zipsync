@@ -18,6 +18,10 @@ struct DownloadSource {
     std::string url;
     //the range of bytes to be downloaded
     uint32_t byterange[2];
+
+    DownloadSource();
+    DownloadSource(const std::string &url); //download whole file
+    DownloadSource(const std::string &url, uint32_t from, uint32_t to); //download range of file
 };
 
 //called when download is complete

@@ -15,6 +15,11 @@ static const int ESTIMATED_DOWNLOAD_OVERHEAD = 100;
 
 namespace ZipSync {
 
+DownloadSource::DownloadSource() { byterange[0] = byterange[1] = 0; }
+DownloadSource::DownloadSource(const std::string &url) : url(url) { byterange[0] = 0; byterange[1] = UINT32_MAX; }
+DownloadSource::DownloadSource(const std::string &url, uint32_t from, uint32_t to) : url(url) { byterange[0] = from; byterange[1] = to; }
+
+
 void Downloader::EnqueueDownload(const DownloadSource &source, const DownloadFinishedCallback &finishedCallback) {
     _downloads.push_back(Download{source, finishedCallback});
 }
@@ -48,10 +53,10 @@ void Downloader::DownloadAllForUrl(const std::string &url) {
     int n = state.downloadsIds.size();
 
     while (state.doneCnt < n) {
-        uint32_t totalSize = 0;
+        uint64_t totalSize = 0;
         int rangesCnt = 0;
         int end = state.doneCnt;
-        uint32_t last = UINT_MAX;
+        uint32_t last = UINT32_MAX;
         std::vector<int> ids;
         do {
             int idx = state.downloadsIds[end++];
@@ -84,7 +89,9 @@ void Downloader::DownloadOneRequest(const std::string &url, const std::vector<in
     for (auto rng : coaslescedRanges) {
         if (!byterangeStr.empty())
             byterangeStr += ",";
-        byterangeStr += std::to_string(rng.first) + "-" + std::to_string(rng.second - 1);
+        byterangeStr += std::to_string(rng.first) + "-";
+        if (rng.second != UINT32_MAX)   //-1 means "up to the end"
+            byterangeStr += std::to_string(rng.second - 1);
     }
 
     int64_t totalEstimate = 0;
@@ -113,7 +120,7 @@ void Downloader::DownloadOneRequest(const std::string &url, const std::vector<in
         size *= nitems;
         auto &resp = *((Downloader*)userdata)->_currResponse;
         if (resp.onerange[0] == resp.onerange[1] && resp.boundary.empty())
-            return 0;  //neither range not multipart response -> halt
+            return 0;  //neither range nor multipart response -> halt
         resp.data.insert(resp.data.end(), buffer, buffer + size);
         return size;
     };
@@ -162,9 +169,12 @@ void Downloader::DownloadOneRequest(const std::string &url, const std::vector<in
     });
     for (int idx : downloadIds) {
         const auto &downSrc = _downloads[idx].src;
-        uint32_t totalSize = downSrc.byterange[1] - downSrc.byterange[0];
+        uint32_t totalSize = UINT32_MAX;
         std::vector<uint8_t> answer;
-        answer.reserve(totalSize);
+        if (downSrc.byterange[1] != UINT32_MAX) {
+            totalSize = downSrc.byterange[1] - downSrc.byterange[0];
+            answer.reserve(totalSize);
+        }
         for (const auto &resp : results) {
             uint32_t currPos = downSrc.byterange[0] + (uint32_t)answer.size();
             uint32_t left = std::max(currPos, resp.onerange[0]);
@@ -177,7 +187,9 @@ void Downloader::DownloadOneRequest(const std::string &url, const std::vector<in
                 resp.data.data() + (right - resp.onerange[0])
             );
         }
-        ZipSyncAssertF(answer.size() == totalSize, "Missing end chunk %zu..%u (%u bytes) after downloading URL %s", answer.size(), totalSize, totalSize - (uint32_t)answer.size(), url.c_str());
+        if (downSrc.byterange[1] != UINT32_MAX) {
+            ZipSyncAssertF(answer.size() == totalSize, "Missing end chunk %zu..%u (%u bytes) after downloading URL %s", answer.size(), totalSize, totalSize - (uint32_t)answer.size(), url.c_str());
+        }
         _downloads[idx].finishedCallback(answer.data(), answer.size());
     }
 }
@@ -236,7 +248,10 @@ void Downloader::UpdateProgress() {
 }
 
 size_t Downloader::BytesToTransfer(const Download &download) {
-    return size_t(download.src.byterange[1] - download.src.byterange[0]) + ESTIMATED_DOWNLOAD_OVERHEAD;
+    size_t dataSize = download.src.byterange[1] - download.src.byterange[0];
+    if (download.src.byterange[1] == UINT32_MAX)
+        dataSize = (1<<20); //a wild guess =)
+    return dataSize + ESTIMATED_DOWNLOAD_OVERHEAD;
 }
 
 }
