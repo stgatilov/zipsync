@@ -75,5 +75,5 @@ target_link_libraries(tests PRIVATE libzipsync CONAN_PKG::doctest)
 add_executable(playground ${playground_sources})
 target_link_libraries(playground libzipsync)
 
-add_executable(commandline ${zipsynccmd_sources})
-target_link_libraries(commandline libzipsync CONAN_PKG::args)
+add_executable(zipsync ${zipsynccmd_sources})
+target_link_libraries(zipsync libzipsync CONAN_PKG::args)
