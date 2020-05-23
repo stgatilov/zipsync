@@ -1,4 +1,6 @@
 #include "ZipSync.h"
+#include "Downloader.h"
+#include "Utils.h"
 #include "args.hxx"
 #include <stdio.h>
 #include <iostream>
@@ -37,6 +39,8 @@ std::string NormalizeSlashes(std::string path) {
     for (char &ch : path)
         if (ch == '\\')
             ch = '/';
+    if (path.size() > 1 && path.back() == '/')
+        path.pop_back();
     return path;
 }
 
@@ -87,6 +91,28 @@ std::vector<std::string> CollectFilePaths(const std::vector<std::string> &elemen
     resPaths.resize(k);
 
     return resPaths;
+}
+
+std::string DownloadSimple(const std::string &url, const std::string &rootDir, const char *printIndent = "") {
+    std::string filepath;
+    for (int i = 0; i < 100; i++) {
+        filepath = rootDir + "/__download" + std::to_string(i) + "__.tmp";
+        if (!ZipSync::IfFileExists(filepath))
+            break;
+    }
+    if (printIndent) {
+        printf("%sDownloading %s to %s\n", printIndent, url.c_str(), filepath.c_str());
+    }
+    ZipSync::Downloader downloader;
+    auto DataCallback = [&filepath](const void *data, int len) {
+        ZipSync::StdioFileHolder f(filepath.c_str(), "wb");
+        int res = fwrite(data, 1, len, f);
+        if (res != len)
+            throw std::runtime_error("Failed to write " + std::to_string(len) + " bytes downloaded from " + filepath);
+    };
+    downloader.EnqueueDownload(ZipSync::DownloadSource(url), DataCallback);
+    downloader.DownloadAll();
+    return filepath;
 }
 
 class ProgressIndicator {
@@ -195,7 +221,7 @@ int TotalCount(const ZipSync::Manifest &mani, bool providedOnly = true) {
 
 void CommandNormalize(args::Subparser &parser) {
     args::ValueFlag<std::string> argRootDir(parser, "root", "Relative paths to zips are based from this directory", {'r', "root"});
-    args::PositionalList<std::string> argZips(parser, "zips", "List of files or globs specifying which zips in root directory to include");
+    args::PositionalList<std::string> argZips(parser, "zips", "List of files or globs specifying which zips in root directory to include", args::Options::Required);
     args::ValueFlag<std::string> argOutDir(parser, "output", "Write normalized zips to this directory (instead of modifying in-place)", {'o', "output"});
     args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"}, args::Options::HiddenFromDescription);
     parser.Parse();
@@ -234,14 +260,17 @@ void CommandNormalize(args::Subparser &parser) {
 
 void CommandAnalyze(args::Subparser &parser) {
     args::ValueFlag<std::string> argRootDir(parser, "root", "Manifests would contain paths relative to this root directory\n"
-        "(all relative paths are based from the root directory)", {'r', "root"}, args::Options::Required);
+        "(all relative paths are based from the root directory)", {'r', "root"});
     args::ValueFlag<std::string> argManifest(parser, "mani", "Path where full manifest would be written (default: manifest.iniz)", {'m', "manifest"}, "manifest.iniz");
     args::ValueFlag<int> argThreads(parser, "threads", "Use this number of parallel threads to accelerate analysis (0 = max)", {'j', "threads"}, 1);
-    args::PositionalList<std::string> argZips(parser, "zips", "List of files or globs specifying which zips in root directory to analyze");
+    args::PositionalList<std::string> argZips(parser, "zips", "List of files or globs specifying which zips in root directory to analyze", args::Options::Required);
     args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"}, args::Options::HiddenFromDescription);
     parser.Parse();
 
-    std::string root = NormalizeSlashes(argRootDir.Get());
+    std::string root = GetCwd();
+    if (argRootDir)
+        root = argRootDir.Get();
+    root = NormalizeSlashes(root);
     std::string maniPath = GetPath(argManifest.Get(), root);
     std::vector<std::string> zipPaths = CollectFilePaths(argZips.Get(), root);
     int threadsNum = argThreads.Get();
@@ -278,27 +307,29 @@ void CommandAnalyze(args::Subparser &parser) {
 }
 
 void CommandClean(args::Subparser &parser) {
-    args::ValueFlag<std::string> argRootDir(parser, "root", "the root directory to clean after repack\n", {'r', "root"}, args::Options::Required);
+    args::ValueFlag<std::string> argRootDir(parser, "root", "the root directory to clean after repack\n", {'r', "root"});
     args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"}, args::Options::HiddenFromDescription);
     parser.Parse();
 
     static std::string PREFIXES[] = {"__reduced__", "__repacked__", "__download"};
 
-    std::string rootDir = NormalizeSlashes(argRootDir.Get());
-    std::vector<std::string> allFiles = EnumerateFilesInDirectory(rootDir);
+    std::string root = GetCwd();
+    if (argRootDir)
+        root = argRootDir.Get();
+    root = NormalizeSlashes(root);
+    std::vector<std::string> allFiles = EnumerateFilesInDirectory(root);
 
     for (std::string filename : allFiles) {
-        std::string fn = fs::path(filename).filename().string();
+        std::string fn = ZipSync::GetFilename(filename);
         bool match = false;
         for (const std::string &p : PREFIXES) {
             if (fn.size() > p.size() && fn.substr(0, p.size()) == p)
                 match = true;
         }
         if (match) {
-            std::string fullPath = (fs::path(rootDir) / filename).string();
-            printf("Deleting %s...", fullPath.c_str());
-            bool ok = fs::remove(fullPath);
-            printf(" %s\n", (ok ? "ok" : "failed"));
+            std::string fullPath = root + '/' + filename;
+            printf("Deleting %s...\n", fullPath.c_str());
+            ZipSync::RemoveFile(fullPath);
         }
     }
 }
@@ -333,8 +364,13 @@ void CommandDiff(args::Subparser &parser) {
     );
     std::set<ZipSync::HashDigest> subtractedHashes;
     for (std::string path : argSubtractedMani.Get()) {
+        path = NormalizeSlashes(path);
+        std::string localPath = path;
+        if (ZipSync::PathAR::IsHttp(path))
+            localPath = DownloadSimple(path, outRoot, "  ");
+        std::string providedRoot = ZipSync::GetDirPath(path);
         ZipSync::Manifest mani;
-        mani.ReadFromIni(ZipSync::ReadIniFile(path.c_str()), root);
+        mani.ReadFromIni(ZipSync::ReadIniFile(localPath.c_str()), providedRoot);
         printf("   %s containing %d files of size %0.3lf MB\n", 
             path.c_str(), TotalCount(mani), TotalCompressedSize(mani) * 1e-6
         );
@@ -375,14 +411,17 @@ void CommandDiff(args::Subparser &parser) {
 
 void CommandUpdate(args::Subparser &parser) {
     args::ValueFlag<std::string> argRootDir(parser, "root", "The update should create/update the set of zips in this root directory\n"
-        "(all relative paths are based from the root directory)", {'r', "root"}, args::Options::Required);
+        "(all relative paths are based from the root directory)", {'r', "root"});
     args::ValueFlag<std::string> argTargetMani(parser, "trgMani", "Path to the target manifest to update to", {'t', "target"}, "manifest.iniz", args::Options::Required);
     args::ValueFlagList<std::string> argProvidedMani(parser, "provMani", "Path to additional provided manifests describing where to take files from", {'p', "provided"}, {});
     args::PositionalList<std::string> argManagedZips(parser, "managed", "List of files or globs specifying which zips must be updated");
     args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"}, args::Options::HiddenFromDescription);
     parser.Parse();
 
-    std::string root = NormalizeSlashes(argRootDir.Get());
+    std::string root = GetCwd();
+    if (argRootDir)
+        root = argRootDir.Get();
+    root = NormalizeSlashes(root);
     std::string targetManiPath = GetPath(argTargetMani.Get(), root);
     std::vector<std::string> providManiPaths = CollectFilePaths(argProvidedMani.Get(), root);
     std::vector<std::string> managedZips = CollectFilePaths(argManagedZips.Get(), root);
