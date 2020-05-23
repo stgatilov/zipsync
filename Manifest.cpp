@@ -159,8 +159,6 @@ IniData Manifest::WriteToIni() const {
     return ini;
 }
 void Manifest::ReadFromIni(const IniData &data, const std::string &rootDir) {
-    ZipSyncAssert(PathAR::IsHttp(rootDir) == false);
-
     for (const auto &pNS : data) {
         FileMetainfo pf;
         pf.location = FileLocation::Local;

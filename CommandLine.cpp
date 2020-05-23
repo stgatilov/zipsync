@@ -96,7 +96,7 @@ std::vector<std::string> CollectFilePaths(const std::vector<std::string> &elemen
 std::string DownloadSimple(const std::string &url, const std::string &rootDir, const char *printIndent = "") {
     std::string filepath;
     for (int i = 0; i < 100; i++) {
-        filepath = rootDir + "/__download" + std::to_string(i) + "__.tmp";
+        filepath = rootDir + "/__download" + std::to_string(i) +  + "__" + ZipSync::GetFilename(url);
         if (!ZipSync::IfFileExists(filepath))
             break;
     }

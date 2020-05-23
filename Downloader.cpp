@@ -28,7 +28,8 @@ void Downloader::SetProgressCallback(const GlobalProgressCallback &progressCallb
 }
 
 void Downloader::DownloadAll() {
-    _progressCallback(0.0, "Downloading started");
+    if (_progressCallback)
+        _progressCallback(0.0, "Downloading started");
 
     for (int i = 0; i <  _downloads.size(); i++)
         _urlStates[_downloads[i].src.url].downloadsIds.push_back(i);
@@ -45,7 +46,8 @@ void Downloader::DownloadAll() {
         DownloadAllForUrl(url);
     }
 
-    _progressCallback(1.0, "Downloading finished");
+    if (_progressCallback)
+        _progressCallback(1.0, "Downloading finished");
 }
 
 void Downloader::DownloadAllForUrl(const std::string &url) {
@@ -244,7 +246,8 @@ void Downloader::UpdateProgress() {
         sprintf(buffer, "Downloading \"%s\"...", _currResponse->url.c_str());
         progress += _currResponse->progressWeight * _currResponse->progressRatio;
     }
-    _progressCallback(progress, buffer);
+    if (_progressCallback)
+        _progressCallback(progress, buffer);
 }
 
 size_t Downloader::BytesToTransfer(const Download &download) {
