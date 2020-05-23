@@ -277,6 +277,32 @@ void CommandAnalyze(args::Subparser &parser) {
     ZipSync::WriteIniFile(maniPath.c_str(), manifest.WriteToIni());
 }
 
+void CommandClean(args::Subparser &parser) {
+    args::ValueFlag<std::string> argRootDir(parser, "root", "the root directory to clean after repack\n", {'r', "root"}, args::Options::Required);
+    args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"}, args::Options::HiddenFromDescription);
+    parser.Parse();
+
+    static std::string PREFIXES[] = {"__reduced__", "__repacked__", "__download"};
+
+    std::string rootDir = NormalizeSlashes(argRootDir.Get());
+    std::vector<std::string> allFiles = EnumerateFilesInDirectory(rootDir);
+
+    for (std::string filename : allFiles) {
+        std::string fn = fs::path(filename).filename().string();
+        bool match = false;
+        for (const std::string &p : PREFIXES) {
+            if (fn.size() > p.size() && fn.substr(0, p.size()) == p)
+                match = true;
+        }
+        if (match) {
+            std::string fullPath = (fs::path(rootDir) / filename).string();
+            printf("Deleting %s...", fullPath.c_str());
+            bool ok = fs::remove(fullPath);
+            printf(" %s\n", (ok ? "ok" : "failed"));
+        }
+    }
+}
+
 void CommandDiff(args::Subparser &parser) {
     args::ValueFlag<std::string> argRootDir(parser, "root", "The set of zips is located in this root directory\n"
         "(all relative paths are based from it)", {'r', "root"});
@@ -440,6 +466,7 @@ int main(int argc, char **argv) {
     args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"});
     args::Command analyze(parser, "analyze", "Create manifests for specified set of zips (on local machine)", CommandAnalyze);
     args::Command normalize(parser, "normalize", "Normalize specified set of zips (on local machine)", CommandNormalize);
+    args::Command clean(parser, "clean", "Delete temporary and intermediate files after repacking", CommandClean);
     args::Command diff(parser, "diff", "Remove files available in given manifests from the set of zips", CommandDiff);
     args::Command update(parser, "update", "Perform update of the set of zips to specified target", CommandUpdate);
     try {
