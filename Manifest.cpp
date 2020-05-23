@@ -159,9 +159,11 @@ IniData Manifest::WriteToIni() const {
     return ini;
 }
 void Manifest::ReadFromIni(const IniData &data, const std::string &rootDir) {
+    bool remote = PathAR::IsHttp(rootDir);
+
     for (const auto &pNS : data) {
         FileMetainfo pf;
-        pf.location = FileLocation::Local;
+        pf.location = (remote ? FileLocation::RemoteHttp : FileLocation::Local);
 
         std::string name = pNS.first;
         if (!stdext::starts_with(name, "File "))
@@ -200,8 +202,10 @@ void Manifest::ReadFromIni(const IniData &data, const std::string &rootDir) {
 }
 
 void Manifest::ReRoot(const std::string &rootDir) {
+    bool remote = PathAR::IsHttp(rootDir);
     for (FileMetainfo &filemeta : _files) {
         filemeta.zipPath = PathAR::FromRel(filemeta.zipPath.rel, rootDir);
+        filemeta.location = (remote ? FileLocation::RemoteHttp : FileLocation::Local);
     }
 }
 

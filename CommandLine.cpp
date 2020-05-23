@@ -429,29 +429,35 @@ void CommandUpdate(args::Subparser &parser) {
 
     ZipSync::Manifest targetManifest;
     ZipSync::Manifest providedManifest;
-    targetManifest.ReadFromIni(ZipSync::ReadIniFile(targetManiPath.c_str()), root);
+    std::string targetManiLocalPath = targetManiPath;
+    if (ZipSync::PathAR::IsHttp(targetManiPath))
+        targetManiLocalPath = DownloadSimple(targetManiPath, root, "");
+    targetManifest.ReadFromIni(ZipSync::ReadIniFile(targetManiLocalPath.c_str()), root);
     printf("Updating directory %s to target %s with %d files of size %0.3lf MB\n",
         root.c_str(), targetManiPath.c_str(), TotalCount(targetManifest, false), TotalCompressedSize(targetManifest, false) * 1e-6
     );
     printf("Provided manifests:\n");
     {
-        std::string srcDir = NormalizeSlashes(fs::path(targetManiPath).parent_path().string());
-        ZipSync::Manifest m = targetManifest.Filter([](const auto &f) { return f.location != ZipSync::FileLocation::Nowhere; });
-        m.ReRoot(srcDir);
+        std::string srcDir = ZipSync::GetDirPath(targetManiPath);
+        ZipSync::Manifest mani = targetManifest.Filter([](const auto &f) { return f.location != ZipSync::FileLocation::Nowhere; });
+        mani.ReRoot(srcDir);
         printf("  %s containing %d files of size %0.3lf MB\n",
-            targetManiPath.c_str(), TotalCount(m), TotalCompressedSize(m) * 1e-6
+            targetManiPath.c_str(), TotalCount(mani), TotalCompressedSize(mani) * 1e-6
         );
-        providedManifest.AppendManifest(m);
+        providedManifest.AppendManifest(mani);
     }
-    for (std::string mpath : providManiPaths) {
-        std::string dir = NormalizeSlashes(fs::path(mpath).parent_path().string());
-        ZipSync::Manifest m;
-        m.ReadFromIni(ZipSync::ReadIniFile(mpath.c_str()), dir);
-        m = m.Filter([](const auto &f) { return f.location != ZipSync::FileLocation::Nowhere; });
+    for (std::string provManiPath : providManiPaths) {
+        std::string srcDir = ZipSync::GetDirPath(provManiPath);
+        std::string provManiLocalPath = provManiPath;
+        if (ZipSync::PathAR::IsHttp(provManiPath))
+            provManiLocalPath = DownloadSimple(provManiPath, root, "  ");
+        ZipSync::Manifest mani;
+        mani.ReadFromIni(ZipSync::ReadIniFile(provManiLocalPath.c_str()), srcDir);
+        mani = mani.Filter([](const auto &f) { return f.location != ZipSync::FileLocation::Nowhere; });
         printf("  %s containing %d files of size %0.3lf MB\n",
-            mpath.c_str(), TotalCount(m), TotalCompressedSize(m) * 1e-6
+            provManiPath.c_str(), TotalCount(mani), TotalCompressedSize(mani) * 1e-6
         );
-        providedManifest.AppendManifest(m);
+        providedManifest.AppendManifest(mani);
     }
 
     ZipSync::UpdateProcess update;
@@ -485,8 +491,11 @@ void CommandUpdate(args::Subparser &parser) {
         }
         throw std::runtime_error("DevelopPlan failed: provided manifests not enough");
     }
-    printf("Update plan developed, repacking\n");
+    printf("Update plan developed\n");
 
+    printf("Downloading missing files...\n");
+    update.DownloadRemoteFiles();
+    printf("Repacking zips...\n");
     update.RepackZips();
     ZipSync::Manifest provMani = update.GetProvidedManifest();
 

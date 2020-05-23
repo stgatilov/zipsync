@@ -592,7 +592,7 @@ void UpdateProcess::DownloadRemoteFiles() {
         PathAR &fn = urlStates[url].path;
         if (fn.abs.empty()) {
             for (int t = 0; t < 100; t++) {
-                fn = PathAR::FromRel("__download" + std::to_string(t) + "__" + m.provided->zipPath.rel, _rootDir);
+                fn = PathAR::FromRel(PrefixFile(m.provided->zipPath.rel, "__download" + std::to_string(t) + "__"), _rootDir);
                 if (!IfFileExists(fn.abs))
                     break;
             }
@@ -607,8 +607,10 @@ void UpdateProcess::DownloadRemoteFiles() {
             const Match &m = _matches[midx];
             const std::string &url = m.provided->zipPath.abs;
             UrlData &state = urlStates[url];
-            if (!state.file)
+            if (!state.file) {
+                CreateDirectoriesForFile(state.path.abs, _rootDir);
                 state.file = StdioFileHolder(state.path.abs.c_str(), "wb");
+            }
 
             state.matchIdxToStart[midx] = ftell(state.file);
             ZipSyncAssert(state.matchIdxToStart[midx] >= 0);
