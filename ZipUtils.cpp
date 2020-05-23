@@ -58,6 +58,43 @@ void unzGetCurrentFilePosition(unzFile zf, uint32_t *localHeaderStart, uint32_t 
     SAFE_CALL(unzCloseCurrentFile(zf));
 }
 
+bool UnzFileIndexed::Entry::operator< (const UnzFileIndexed::Entry &b) const {
+    return byterangeStart < b.byterangeStart;
+}
+UnzFileIndexed::~UnzFileIndexed() {}
+UnzFileIndexed::UnzFileIndexed() : UnzFileUniquePtr(0, unzClose) {}
+void UnzFileIndexed::reset(unzFile zf) {
+    UnzFileUniquePtr::reset(zf);
+    sortedEntries.clear();
+    if (!zf)
+        return;
+    SAFE_CALL(unzGoToFirstFile(zf));
+    while (1) {
+        char currFilename[SIZE_PATH];
+        SAFE_CALL(unzGetCurrentFileInfo(zf, NULL, currFilename, sizeof(currFilename), NULL, 0, NULL, 0));
+        uint32_t from, to;
+        unzGetCurrentFilePosition(zf, &from, NULL, &to);
+        Entry e;
+        e.byterangeStart = from;
+        SAFE_CALL(unzGetFilePos(zf, &e.unzPos));
+        sortedEntries.push_back(e);
+        int res = unzGoToNextFile(zf);
+        if (res == UNZ_END_OF_LIST_OF_FILE)
+            break;   //finished
+        SAFE_CALL(res);
+    }
+    if (!std::is_sorted(sortedEntries.begin(), sortedEntries.end()))
+        std::sort(sortedEntries.begin(), sortedEntries.end());
+}
+void UnzFileIndexed::LocateByByterange(uint32_t start, uint32_t end) {
+    Entry aux;
+    aux.byterangeStart = start;
+    int idx = std::lower_bound(sortedEntries.begin(), sortedEntries.end(), aux) - sortedEntries.begin();
+    ZipSyncAssertF(idx < sortedEntries.size() && sortedEntries[idx].byterangeStart == start, "Failed to find file by byterange");
+    SAFE_CALL(unzGoToFilePos(get(), &sortedEntries[idx].unzPos));
+}
+
+
 bool unzLocateFileAtBytes(unzFile zf, const char *filename, uint32_t from, uint32_t to) {
     SAFE_CALL(unzGoToFirstFile(zf));
     while (1) {

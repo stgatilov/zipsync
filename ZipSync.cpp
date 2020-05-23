@@ -118,6 +118,14 @@ public:
         bool _repacked = false;
         bool _reduced = false;
 
+        //cached during repacking to avoid reopening
+        mutable UnzFileIndexed zfCache;
+
+        UnzFileIndexed &UnzFileCached() const {
+            if (!zfCache)
+                zfCache.reset(unzOpen(_zipPath.c_str()));
+            return zfCache;
+        }
         bool operator< (const ZipInfo &b) const {
             return _zipPath < b._zipPath;
         }
@@ -170,7 +178,7 @@ public:
             zip._zipPath = zp;
             zip._zipPathRepacked = PrefixFile(zp, "__repacked__");
             zip._zipPathReduced = PrefixFile(zp, "__reduced__");
-            _zips.push_back(zip);
+            _zips.push_back(std::move(zip));
         }
 
         //fill zips with initial info
@@ -298,9 +306,9 @@ public:
         for (int midx : zip._matchIds) {
             const Match &m = _owner._matches[midx];
 
-            //find provided file (TODO: optimize?)
-            UnzFileHolder zf(m.provided->zipPath.abs.c_str());
-            ZipSyncAssert(unzLocateFileAtBytes(zf, m.provided->filename.c_str(), m.provided->byterange[0], m.provided->byterange[1]));
+            //find provided file
+            UnzFileIndexed &zf = FindZip(m.provided->zipPath.abs).UnzFileCached();
+            zf.LocateByByterange(m.provided->byterange[0], m.provided->byterange[1]);
 
             //can we avoid recompressing the file?
             unz_file_info info;
@@ -392,6 +400,7 @@ public:
                 continue;       //already reduced
             if (zip._usedCnt > 0)
                 continue;       //original zip still needed as source
+            zip.zfCache.reset();
 
             if (IfFileExists(zip._zipPath)) {
                 UnzFileHolder zf(zip._zipPath.c_str());
@@ -550,6 +559,8 @@ public:
             AnalyzeRepackedZip(zip);
             ReduceOldZips();
         }
+        for (ZipInfo &zip : _zips)
+            zip.zfCache.reset();
 
         RenameRepackedZips();
         RewriteProvidedManifest();
@@ -619,7 +630,8 @@ void UpdateProcess::DownloadRemoteFiles() {
         const UrlData &state = pKV.second;
 
         minizipAddCentralDirectory(state.path.abs.c_str());
-        UnzFileHolder zf(state.path.abs.c_str());
+        UnzFileIndexed zf;
+        zf.reset(unzOpen(state.path.abs.c_str()));
 
         for (const auto &pMO : state.matchIdxToStart) {
             int matchIdx = pMO.first;
@@ -629,7 +641,7 @@ void UpdateProcess::DownloadRemoteFiles() {
             //verify hash of the downloaded file (we must be sure that it is correct)
             //TODO: what if bad mirror changes file local header?...
             uint32_t size = (m.provided->byterange[1] - m.provided->byterange[0]);
-            ZipSyncAssert(unzLocateFileAtBytes(zf, m.provided->filename.c_str(), offset, offset + size));
+            zf.LocateByByterange(offset, offset + size);
             SAFE_CALL(unzOpenCurrentFile2(zf, NULL, NULL, true));
             Hasher hasher;
             char buffer[SIZE_FILEBUFFER];

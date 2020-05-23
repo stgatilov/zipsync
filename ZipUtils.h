@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <vector>
 #include "ZSAssert.h"
 
 #include <unzip.h>
@@ -59,8 +60,26 @@ public:
 //note: file must be NOT opened
 void unzGetCurrentFilePosition(unzFile zf, uint32_t *localHeaderStart, uint32_t *fileDataStart, uint32_t *fileDataEnd);
 
+class UnzFileIndexed : public UnzFileUniquePtr {
+    struct Entry {
+        uint32_t byterangeStart;
+        unz_file_pos unzPos;
+        bool operator< (const Entry &b) const;
+    };
+    std::vector<Entry> sortedEntries;
+public:
+    ~UnzFileIndexed();
+    UnzFileIndexed();
+    UnzFileIndexed(UnzFileIndexed &&) = default;
+    operator unzFile() const { return get(); }
+    void reset(unzFile zf = NULL);
+    void LocateByByterange(uint32_t start, uint32_t end);
+};
+
+/*
 //like unzLocateFile, but also checks exact match by byterange (which includes local file header)
 bool unzLocateFileAtBytes(unzFile zf, const char *filename, uint32_t from, uint32_t to);
+*/
 
 void minizipCopyFile(unzFile zf, zipFile zfOut, const char *filename, int method, int flags, uint16_t internalAttribs, uint32_t externalAttribs, uint32_t dosDate, bool copyRaw, uint32_t crc, uint32_t contentsSize);
 
