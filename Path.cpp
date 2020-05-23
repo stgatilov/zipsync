@@ -81,7 +81,8 @@ std::string GetDirPath(std::string somePath) {
 }
 std::string GetFilename(std::string somePath) {
     size_t pos = somePath.find_last_of('/');
-    ZipSyncAssert(pos != std::string::npos);
+    if (pos == std::string::npos)
+        return somePath;
     ZipSyncAssert(pos + 1 < somePath.size());
     return somePath.substr(pos + 1);
 }
