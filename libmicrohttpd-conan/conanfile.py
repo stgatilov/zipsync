@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from conans import ConanFile, AutoToolsBuildEnvironment, tools
+from conans import ConanFile, AutoToolsBuildEnvironment, tools, MSBuild
 import os
 
 
@@ -45,14 +45,28 @@ class LibmicrohttpdConan(ConanFile):
 
     def build(self):
         with tools.chdir(self.source_subfolder):
-            autotools = self.configure_autotools()
-            autotools.make()
+            if self.settings.compiler == 'Visual Studio':
+                with tools.chdir('w32/VS2013'):
+                    msbuild = MSBuild(self)
+                    for relpath in ['../common', '../../src/include', '../../src/include/microhttpd']:
+                        msbuild.build_env.include_paths.append(os.path.abspath(relpath))
+                    config_name = ('Debug' if self.settings.build_type == 'Debug' else 'Release')
+                    shared_name = ('dll' if self.options.shared else 'static')
+                    msbuild.build("libmicrohttpd.sln", build_type = config_name + '-' + shared_name, targets = ['libmicrohttpd'])
+            else:
+                autotools = self.configure_autotools()
+                autotools.make()
 
     def package(self):
         self.copy(pattern="COPYING", dst="licenses", src=self.source_subfolder)
-        with tools.chdir(self.source_subfolder):
-            autotools = self.configure_autotools()
-            autotools.install()
+        if self.settings.compiler == 'Visual Studio':
+            self.copy(pattern="**/microhttpd.h", dst="include", src=os.path.join(self.source_subfolder, 'w32'), keep_path=False)
+            self.copy(pattern="*.lib", dst="lib", src=self.source_subfolder, keep_path=False)
+            self.copy(pattern="*.dll", dst="bin", src=self.source_subfolder, keep_path=False)
+        else:
+            with tools.chdir(self.source_subfolder):
+                autotools = self.configure_autotools()
+                autotools.install()
 
     def package_info(self):
         self.cpp_info.libs = tools.collect_libs(self)

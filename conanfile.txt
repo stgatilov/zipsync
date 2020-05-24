@@ -7,7 +7,7 @@ libcurl/7.60.0@bincrafters/stable
 BLAKE2/master@tdmsync2/local
 doctest/2.3.1@bincrafters/stable
 args/6.2.2@pavel-belikov/stable
-libmicrohttpd/0.9.59@bincrafters/stable
+libmicrohttpd/0.9.59@tdmsync2/local
 
 [options]
 zlib:minizip=True
