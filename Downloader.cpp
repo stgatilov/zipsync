@@ -2,6 +2,7 @@
 #include <curl/curl.h>
 #include <algorithm>
 #include "ZSAssert.h"
+#include "StdString.h"
 #undef min
 #undef max
 
@@ -14,6 +15,15 @@ static const int MAX_PARTS_PER_REQUEST = 20;
 static const int ESTIMATED_DOWNLOAD_OVERHEAD = 100;
 
 namespace ZipSync {
+
+//note: HTTP header field names are case-insensitive
+//however, we cannot just lowercase all headers, since multipary boundary is case-sensitive
+const char *CheckHttpPrefix(const std::string &line, const std::string &prefix) {
+    if (!stdext::istarts_with(line, prefix))
+        return nullptr;
+    const char *rest = line.c_str() + prefix.size();
+    return rest;
+}
 
 DownloadSource::DownloadSource() { byterange[0] = byterange[1] = 0; }
 DownloadSource::DownloadSource(const std::string &url) : url(url) { byterange[0] = 0; byterange[1] = UINT32_MAX; }
@@ -108,13 +118,17 @@ void Downloader::DownloadOneRequest(const std::string &url, const std::vector<in
         auto &resp = *((Downloader*)userdata)->_currResponse;
         std::string str(buffer, buffer + size);
         size_t from, to, all;
-        if (sscanf(str.c_str(), "Content-Range: bytes %zu-%zu/%zu", &from, &to, &all) == 3) {
-            resp.onerange[0] = from;
-            resp.onerange[1] = to + 1;
+        if (const char *tail = CheckHttpPrefix(str, "Content-Range: bytes ")) {
+            if (sscanf(tail, "%zu-%zu/%zu", &from, &to, &all) == 3) {
+                resp.onerange[0] = from;
+                resp.onerange[1] = to + 1;
+            }
         }
         char boundary[128] = {0};
-        if (sscanf(str.c_str(), "Content-Type: multipart/byteranges; boundary=%s", boundary) == 1) {
-            resp.boundary = std::string("\r\n--") + boundary;// + "\r\n";
+        if (const char *tail = CheckHttpPrefix(str, "Content-Type: multipart/byteranges; boundary=")) {
+            if (sscanf(tail, "%s", boundary) == 1) {
+                resp.boundary = std::string("\r\n--") + boundary;// + "\r\n";
+            }
         }
         return size;
     };
@@ -227,9 +241,11 @@ void Downloader::BreakMultipartResponse(const CurlResponse &response, std::vecto
         CurlResponse part;
         for (const auto &h : header) {
             size_t from, to, all;
-            if (sscanf(h.c_str(), "Content-Range: bytes %zu-%zu/%zu", &from, &to, &all) == 3) {
-                part.onerange[0] = from;
-                part.onerange[1] = to + 1;
+            if (const char *tail = CheckHttpPrefix(h, "Content-Range: bytes ")) {
+                if (sscanf(tail, "%zu-%zu/%zu", &from, &to, &all) == 3) {
+                    part.onerange[0] = from;
+                    part.onerange[1] = to + 1;
+                }
             }
         }
         ZipSyncAssertF(part.onerange[0] != part.onerange[1], "Failed to find range in part headers");
