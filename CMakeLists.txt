@@ -45,6 +45,8 @@ set(tests_sources
     Fuzzer.cpp
     Fuzzer.h
     TestsMain.cpp
+    HttpServer.cpp
+    HttpServer.h
 )
 
 set(playground_sources
@@ -70,7 +72,7 @@ add_library(libzipsync ${sources})
 target_link_libraries(libzipsync PUBLIC CONAN_PKG::zlib CONAN_PKG::BLAKE2 CONAN_PKG::libcurl)
 
 add_executable(tests ${tests_sources})
-target_link_libraries(tests PRIVATE libzipsync CONAN_PKG::doctest)
+target_link_libraries(tests PRIVATE libzipsync CONAN_PKG::doctest CONAN_PKG::libmicrohttpd)
 
 add_executable(playground ${playground_sources})
 target_link_libraries(playground libzipsync)

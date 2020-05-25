@@ -8,6 +8,7 @@
 #include "StdFilesystem.h"
 #include "ZipSync.h"
 #include "Fuzzer.h"
+#include "HttpServer.h"
 using namespace ZipSync;
 
 #include <zip.h>
@@ -618,4 +619,14 @@ TEST_CASE("FuzzTemp"
 
 TEST_CASE("FuzzLocal50") {
     Fuzz((GetTempDir()).string(), 50);
+}
+
+//================================================================
+
+TEST_CASE("microhttpd temp") {
+    HttpServer server;
+    server.SetRootDir(GetTempDir().string());
+    server.Start();
+    while (1);
+    server.Stop();
 }
