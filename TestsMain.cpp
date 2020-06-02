@@ -624,6 +624,12 @@ TEST_CASE("FuzzLocal50") {
 //================================================================
 
 TEST_CASE("microhttpd temp") {
+    {
+        stdext::create_directories(GetTempDir());
+        StdioFileHolder test((GetTempDir() / "test.txt").string().c_str(), "wt");
+        fprintf(test, "Hello, microhttpd!\n");
+        fflush(test);
+    }
     HttpServer server;
     server.SetRootDir(GetTempDir().string());
     server.Start();
