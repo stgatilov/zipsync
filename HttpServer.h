@@ -21,6 +21,7 @@ namespace ZipSync {
 class HttpServer {
     std::string _rootDir;
     MHD_Daemon *_daemon = nullptr;
+    int _blockSize = 0;
 
 public:
     static const int PORT = 8090;
@@ -31,14 +32,14 @@ public:
 
     //set the root directory so serve files inside
     void SetRootDir(const std::string &root);
+    void SetBlockSize(int blockSize = 128*1024) { _blockSize = blockSize; }
 
     void Start();
     void Stop();
 
 private:
-    struct FileDownload;
-    static ssize_t FileReaderCallback(void *cls, uint64_t pos, char *buf, size_t max);
-    static void FileReaderFinalize(void *cls);
+    class FileDownload;
+    class MultipartDownload;
 
     static int MhdFunction(
         void *cls,

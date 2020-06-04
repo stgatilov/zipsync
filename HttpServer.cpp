@@ -4,13 +4,16 @@
 #include "Path.h"
 #include "Utils.h"
 #include "StdString.h"
+#include <algorithm>
 
 namespace ZipSync {
 
 HttpServer::~HttpServer() {
     Stop();
 }
-HttpServer::HttpServer() {}
+HttpServer::HttpServer() {
+    SetBlockSize();
+}
 void HttpServer::SetRootDir(const std::string &root) {
     _rootDir = root;
 }
@@ -63,23 +66,120 @@ int HttpServer::MhdFunction(
     return ((HttpServer*)cls)->AcceptCallback(connection, url, method, version);
 }
 
-struct HttpServer::FileDownload {
-    StdioFileHolder file;
-    uint64_t base = 0;
-    FileDownload() : file(NULL) {}
+class HttpServer::FileDownload {
+    StdioFileHolder _file;
+    uint64_t _base = 0;
+public:
+    FileDownload(StdioFileHolder &&file, uint64_t base) : _file(std::move(file)), _base(base) {}
+    static ssize_t FileReaderCallback(void *cls, uint64_t pos, char *buf, size_t max) {
+        auto *down = (FileDownload*)cls;
+        fseek(down->_file, down->_base + pos, SEEK_SET);
+        size_t readBytes = fread(buf, 1, max, down->_file);
+        return readBytes;
+    }
+    static void FileReaderFinalize(void *cls) {
+        auto *down = (FileDownload*)cls;
+        delete down;
+    }
 };
 
-ssize_t HttpServer::FileReaderCallback(void *cls, uint64_t pos, char *buf, size_t max) {
-    auto *down = (FileDownload*)cls;
-    fseek(down->file, down->base + pos, SEEK_SET);
-    size_t readBytes = fread(buf, 1, max, down->file);
-    return readBytes;
-}
+struct ChunkInfo {
+    uint64_t responseStart;
+    uint64_t size;
+    std::string rawData;        //case 1
+    uint64_t fileStart;         //case 2
+    bool operator< (const ChunkInfo &other) const {
+        return responseStart < other.responseStart;
+    }
+    static ChunkInfo CreateWithData(uint64_t &pos, const std::string &data) {
+        ChunkInfo res;
+        res.responseStart = pos;
+        res.fileStart = UINT64_MAX;
+        res.rawData = data;
+        res.size = res.rawData.size();
+        pos += res.size;
+        return res;
+    }
+    static ChunkInfo CreateAsFileRange(uint64_t &pos, uint64_t rngStart, uint64_t rngLen) {
+        ChunkInfo res;
+        res.responseStart = pos;
+        res.size = rngLen;
+        res.fileStart = rngStart;
+        pos += res.size;
+        return res;
+    }
+};
+class HttpServer::MultipartDownload {
+    StdioFileHolder _file;
+    uint64_t _fileSize = UINT64_MAX;
+    uint64_t _totalContentSize = 0;
+    std::string _boundary;   //includes leading EOL
+    std::vector<ChunkInfo> _chunks;
+public:
+    MultipartDownload(StdioFileHolder &&file, uint64_t fileSize, std::vector<std::pair<uint64_t, uint64_t>> arr) : _file(std::move(file)), _fileSize(fileSize) {
+        //note: we do NOT check that boundary does not occur in data
+        _boundary = std::string("********") + "72FFC411326F7C93";
+        int n = arr.size();
+        uint64_t outPos = 0;
+        for (int i = 0; i < n; i++) {
+            std::string header;
+            if (i)
+                header += "\r\n";
+            header += "--";
+            header += _boundary;
+            header += "\r\n";
+            char buff[64];
+            sprintf(buff, "Content-Range: bytes %llu-%llu/%llu\r\n\r\n", arr[i].first, arr[i].second, _fileSize);
+            header += buff;
+            _chunks.push_back(ChunkInfo::CreateWithData(outPos, header));
+            _chunks.push_back(ChunkInfo::CreateAsFileRange(outPos, arr[i].first, arr[i].second - arr[i].first + 1));
+        }
+        std::string tail = "\r\n";
+        tail += "--";
+        tail += _boundary;
+        tail += "--";
+        _chunks.push_back(ChunkInfo::CreateWithData(outPos, tail));
+        _totalContentSize = outPos;
+    }
+    const char *GetBoundary() const {
+        return _boundary.c_str();
+    }
+    uint64_t GetTotalSize() const {
+        return _totalContentSize; 
+    }
+    void FileReaderCallback(uint64_t pos, size_t &len, char *buf) {
+        ChunkInfo aux = {pos};
+        int idx = std::upper_bound(_chunks.begin(), _chunks.end(), aux) - _chunks.begin() - 1;
+        ZipSyncAssert(idx >= 0 && pos >= _chunks[idx].responseStart);
+        const ChunkInfo &chunk = _chunks[idx];
+        uint64_t offset = pos - chunk.responseStart;
+        uint64_t remains = chunk.size - offset;
+        if (len > remains) {
+            len = remains;
+            ZipSyncAssert(len > 0);
+        }
+        if (chunk.fileStart != UINT64_MAX) {
+            fseek(_file, chunk.fileStart + offset, SEEK_SET);
+            len = fread(buf, 1, len, _file);
+        }
+        else {
+            memcpy(buf, chunk.rawData.data() + offset, len);
+        }
+    }
+    static ssize_t FileReaderCallback(void *cls, uint64_t pos, char *buf, size_t max) {
+        auto *down = (MultipartDownload*)cls;
+        down->FileReaderCallback(pos, max, buf);
+        if (max == 0)
+            return ssize_t(-1);
+        return max;
+    }
+    static void FileReaderFinalize(void *cls) {
+        auto *down = (MultipartDownload*)cls;
+        delete down;
+    }
+};
 
-void HttpServer::FileReaderFinalize(void *cls) {
-    auto *down = (FileDownload*)cls;
-    delete down;
-}
+
 
 #define PAGE_NOT_FOUND "<html><head><title>File not found</title></head><body>File not found</body></html>"
 #define PAGE_NOT_SATISFIABLE "<html><head><title>Range error</title></head><body>Range not satisfiable</body></html>"
@@ -154,25 +254,35 @@ int HttpServer::AcceptCallback(
             return ReturnWithErrorResponse(connection, MHD_HTTP_RANGE_NOT_SATISFIABLE, PAGE_NOT_SATISFIABLE);
     }
 
-    if (ranges.size() > 1)
-        return ReturnWithErrorResponse(connection, MHD_HTTP_RANGE_NOT_SATISFIABLE, PAGE_NOT_SATISFIABLE);
-    std::unique_ptr<FileDownload> down(new FileDownload());
     MHD_Response *response = nullptr;
+    int httpCode = MHD_HTTP_OK;
     if (ranges.size() == 0) {
-        down->file = file.release();
-        response = MHD_create_response_from_callback(fsize, 128 * 1024, FileReaderCallback, down.release(), FileReaderFinalize);
+        std::unique_ptr<FileDownload> down(new FileDownload(std::move(file), 0));
+        response = MHD_create_response_from_callback(fsize, _blockSize, FileDownload::FileReaderCallback, down.release(), FileDownload::FileReaderFinalize);
     }
     else if (ranges.size() == 1) {
-        down->file = file.release();
-        down->base = ranges[0].first;
-        response = MHD_create_response_from_callback(ranges[0].second - ranges[0].first + 1, 128 * 1024, FileReaderCallback, down.release(), FileReaderFinalize);
+        std::unique_ptr<FileDownload> down(new FileDownload(std::move(file), ranges[0].first));
+        response = MHD_create_response_from_callback(ranges[0].second - ranges[0].first + 1, _blockSize, FileDownload::FileReaderCallback, down.release(), FileDownload::FileReaderFinalize);
+        httpCode = MHD_HTTP_PARTIAL_CONTENT;
+        char buff[64];
+        sprintf(buff, "bytes %llu-%llu/%llu", ranges[0].first, ranges[0].second, fsize);
+        MHD_add_response_header(response, "Content-Range", buff);
+    }
+    else {
+        std::unique_ptr<MultipartDownload> down(new MultipartDownload(std::move(file), fsize, ranges));
+        uint64_t totalContentSize = down->GetTotalSize();
+        char buff[64];
+        sprintf(buff, "multipart/byteranges; boundary=%s", down->GetBoundary());
+        response = MHD_create_response_from_callback(totalContentSize, _blockSize, MultipartDownload::FileReaderCallback, down.release(), MultipartDownload::FileReaderFinalize);
+        httpCode = MHD_HTTP_PARTIAL_CONTENT;
+        MHD_add_response_header(response, "Content-Type", buff);
     }
     if (!response)
         return MHD_NO;
 
     int ret = MHD_queue_response(
         connection,
-        MHD_HTTP_OK,
+        httpCode,
         response
     );
     MHD_destroy_response(response);
