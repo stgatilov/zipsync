@@ -348,6 +348,47 @@ rank 	  lemma / word 	PoS 	freq 	dispersion
         }
     }
 
+    void AddDuplicateFiles(DirState &target, std::vector<DirState*> provided) {
+        int cnt = IntD(0, 3)(_rnd);
+        if (cnt == 0)
+            return;
+        for (int idx = 0; idx < cnt; idx++) {
+            DirState tmpState = GenTargetState(1, 1);
+            std::string origZfn = tmpState.begin()->first;
+            auto origInzf = tmpState.begin()->second[0];
+            int tMult = IntD(1, 2)(_rnd);
+            int pMult = IntD(1, 2)(_rnd);
+            for (int t = 0; t < tMult; t++) {
+                if (t == 0 || target.empty())
+                    target[origZfn].push_back(origInzf);
+                else {
+                    auto inzf = origInzf;
+                    if (IntD(0, 99)(_rnd) < 70);
+                        inzf.first = GenPaths(1)[0];
+                    RandomFrom(target).second.push_back(inzf);
+                }
+            }
+            for (int p = 0; p < pMult; p++) {
+                DirState *prov = RandomFrom(provided);
+                if (p == 0 || prov->empty() && IntD(0, 1)(_rnd))
+                    (*prov)[origZfn].push_back(origInzf);
+                else {
+                    auto inzf = origInzf;
+                    InZipParams rndParams = GenInZipParams();
+                    if (IntD(0, 99)(_rnd) < 20)
+                        inzf.first = GenPaths(1)[0];
+                    if (IntD(0, 99)(_rnd) < 20)
+                        inzf.second.params.externalAttribs = rndParams.externalAttribs;
+                    if (IntD(0, 99)(_rnd) < 20) {
+                        inzf.second.params.method = rndParams.method;
+                        inzf.second.params.level = rndParams.level;
+                    }
+                    RandomFrom(*prov).second.push_back(inzf);
+                }
+            }
+        }
+    }
+
     bool AddMissingFiles(const DirState &target, std::vector<DirState*> provided, bool leaveMisses = false) {
         std::vector<const InZipFile*> targetFiles;
         for (const auto &zipPair : target)
@@ -586,6 +627,7 @@ public:
         SplitState(_initialAllSourcesState, _initialSourceState);
         std::vector<DirState*> provStates = {&_initialInplaceState};
         for (auto &s : _initialSourceState) provStates.push_back(&s);
+        AddDuplicateFiles(_initialTargetState, provStates);
         TryAddFullZip(_initialTargetState, provStates);
         _shouldUpdateSucceed = AddMissingFiles(_initialTargetState, provStates, true);
 
