@@ -673,7 +673,7 @@ void Fuzz(std::string where, int casesNum, bool enableRemote) {
         for (int i = 0; i < SK; i++)
             if (SPECIAL_SEEDS[i] == seed)
                 duplicate = true;
-        if (duplicate)
+        if (attempt >= 0 && duplicate)
             continue;
 
         fuzz.GenerateInput(where + "/" + std::to_string(seed), seed);
