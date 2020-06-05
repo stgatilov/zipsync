@@ -684,6 +684,7 @@ TEST_CASE("HttpServer") {
             server.SetBlockSize(13);    //small block size to test stuff better
         server.SetRootDir(GetTempDir().string());
         server.Start();
+        server.Start();
 
         CHECK(CurlSimple(server.GetRootUrl() + "test.txt") == DataTestTxt);
         CurlSimple(server.GetRootUrl() + "badfilename.txt", "", {404});
@@ -725,7 +726,7 @@ tpd
         CurlSimple(server.GetRootUrl() + "test.txt", "0-100", {416});
         CurlSimple(server.GetRootUrl() + "test.txt", "0-3,10-7", {416});
         CurlSimple(server.GetRootUrl() + "test.txt", "0-5,5-7", {416});
-        CurlSimple(server.GetRootUrl() + "test.txt", "0-5,5-7", {416});
+        CurlSimple(server.GetRootUrl() + "test.txt", "low-high", {416});
 
         if (blk == 1) CHECK(CurlSimple(server.GetRootUrl() + "subdir/squares.txt") == DataSquaresTxt);
         CHECK(CurlSimple(server.GetRootUrl() + "subdir/squares.txt", "1000000-1000100", {206}) == DataSquaresTxt.substr(1000000, 101));
@@ -735,6 +736,8 @@ tpd
         CHECK(CurlSimple(server.GetRootUrl() + "identity.bin", "256-512", {206}) == DataIdentityBin.substr(256, 257));
         CHECK(CurlSimple(server.GetRootUrl() + "identity.bin", "5000-15678", {206}) == DataIdentityBin.substr(5000, 10679));
         if (blk == 1) CHECK(CurlSimple(server.GetRootUrl() + "identity.bin", "123456-654321", {206}) == DataIdentityBin.substr(123456, 654321-123456+1));
+
+        if (blk == 0) server.Stop();
     }
 }
 
@@ -848,6 +851,14 @@ TEST_CASE("Downloader") {
             CHECK(data[8] == DataSquaresTxt.substr(30000, 10000));
             CHECK(data[9] == DataIdentityBin.substr(50000, 5000));
         }
+
+        { //download empty
+            Downloader down;
+            down.DownloadAll();
+            int totalDownloaded = down.TotalBytesDownloaded();
+            CHECK(totalDownloaded == 0);
+        }
+
     }
 }
 
