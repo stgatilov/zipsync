@@ -593,32 +593,15 @@ public:
     }
 
     bool ValidateInput() {
-        bool aliased = (
-            CheckForCaseAliasing(_initialTargetState, _initialTargetState) ||
-            CheckForCaseAliasing(_initialInplaceState, _initialInplaceState) ||
-            CheckForCaseAliasing(_initialAllSourcesState, _initialAllSourcesState)
-        );
-        if (aliased) {
-            //some of the directories is expected to contain case-aliased paths: skip such case
-            return false;
-        }
-        if (CheckForCaseAliasing(_initialTargetState, _initialInplaceState)) {
-            //some zip paths in updated directory and target directory are case-aliased
-            //while it does not prohibit the update, it would be hard to validate it due to case differences
-            return false;
-        }
-        if (_remoteEnabled) {
-            bool aliased = (
-                CheckForCaseAliasing(_initialAllSourcesState, _initialTargetState) ||
-                CheckForCaseAliasing(_initialAllSourcesState, _initialInplaceState)
-            );
-            if (aliased) {
-                //some zip paths in updated directory and remote/target directory are case-aliased
-                //this will break update, because downloader will put new files into wrong-case directory
-                //TODO: shouldn't this be fixed?
-                return false;
-            }
-        }
+        std::vector<DirState*> states;
+        states.push_back(&_initialTargetState);
+        states.push_back(&_initialInplaceState);
+        for (auto &state : _initialSourceState) states.push_back(&state);
+
+        for (int i = 0; i < states.size(); i++)
+            for (int j = 0; j <= i; j++)
+                if (CheckForCaseAliasing(*states[i], *states[j]))
+                    return false;   //cannot ensure proper testing in case of any case collision 
 
         _numCasesValidated++;
         return true;
