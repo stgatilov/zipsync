@@ -567,6 +567,18 @@ public:
             //while it does not prohibit the update, it would be hard to validate it due to case differences
             return false;
         }
+        if (_remoteEnabled) {
+            bool aliased = (
+                CheckForCaseAliasing(_initialAllSourcesState, _initialTargetState) ||
+                CheckForCaseAliasing(_initialAllSourcesState, _initialInplaceState)
+            );
+            if (aliased) {
+                //some zip paths in updated directory and remote/target directory are case-aliased
+                //this will break update, because downloader will put new files into wrong-case directory
+                //TODO: shouldn't this be fixed?
+                return false;
+            }
+        }
 
         _numCasesValidated++;
         return true;
