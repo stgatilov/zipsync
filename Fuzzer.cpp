@@ -711,7 +711,7 @@ public:
 //==========================================================================================
 
 void Fuzz(std::string where, int casesNum, bool enableRemote) {
-    static const int SPECIAL_SEEDS[] = {8573};
+    static const int SPECIAL_SEEDS[] = {0};
     int SK = sizeof(SPECIAL_SEEDS) / sizeof(SPECIAL_SEEDS[0]);
     if (casesNum < 0)
         casesNum = 1000000000;  //infinite
