@@ -164,7 +164,10 @@ void Downloader::DownloadOneRequest(const std::string &url, const std::vector<in
     curl_easy_setopt(curl.get(), CURLOPT_NOPROGRESS, 0);
     UpdateProgress();
     CURLcode ret = curl_easy_perform(curl.get());
+    long httpRes = 0;
+    curl_easy_getinfo(curl.get(), CURLINFO_HTTP_CODE, &httpRes);
     curl.reset();
+    ZipSyncAssertF(httpRes == 200 || httpRes == 206, "Unexpected HTTP response %d for URL %s", httpRes, url.c_str());
     ZipSyncAssertF(ret != CURLE_WRITE_ERROR, "Response without byteranges for URL %s", url.c_str());
     ZipSyncAssertF(ret == CURLE_OK, "Unexpected CURL error %d on URL %s", ret, url.c_str());
     _currResponse->progressRatio = 1.0;
