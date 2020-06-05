@@ -599,6 +599,7 @@ void UpdateProcess::DownloadRemoteFiles() {
                 if (!IfFileExists(fn.abs))
                     break;
             }
+            ZipSyncAssertF(!fn.abs.empty(), "too many \"__download??__%s\" files", m.provided->zipPath.rel.c_str());
             downloadedFilenames.insert(fn.abs);
         }
         urlStates[url].totalCount++;
