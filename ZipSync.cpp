@@ -577,18 +577,25 @@ void UpdateProcess::DownloadRemoteFiles() {
         PathAR path;
         StdioFileHolder file;
         int finishedCount = 0, totalCount = 0;
-        std::map<int, uint32_t> matchIdxToStart;
+        std::map<uint32_t, int> baseToProvIdx;
         UrlData() : file(nullptr) {}
     };
 
     std::map<std::string, UrlData> urlStates;
     Downloader downloader;
     std::set<std::string> downloadedFilenames;
+    std::map<int, std::vector<int>> provIdxToMatchIds;
     for (int midx = 0; midx < _matches.size(); midx++) {
         const Match &m = _matches[midx];
         if (m.provided->location != FileLocation::RemoteHttp)
             continue;
         const std::string &url = m.provided->zipPath.abs;
+
+        int provIdx = m.provided._index;
+        bool alreadyScheduled = (provIdxToMatchIds.count(provIdx) > 0);
+        provIdxToMatchIds[provIdx].push_back(midx);
+        if (alreadyScheduled)
+            continue;   //same file wanted by many targets: download once
 
         PathAR &fn = urlStates[url].path;
         if (fn.abs.empty()) {
@@ -608,17 +615,15 @@ void UpdateProcess::DownloadRemoteFiles() {
         src.url = url;
         src.byterange[0] = m.provided->byterange[0];
         src.byterange[1] = m.provided->byterange[1];
-        downloader.EnqueueDownload(src, [this,&urlStates,midx](const void *data, uint32_t bytes) {
-            const Match &m = _matches[midx];
-            const std::string &url = m.provided->zipPath.abs;
+        downloader.EnqueueDownload(src, [this,&urlStates,url,provIdx](const void *data, uint32_t bytes) {
             UrlData &state = urlStates[url];
             if (!state.file) {
                 CreateDirectoriesForFile(state.path.abs, _rootDir);
                 state.file = StdioFileHolder(state.path.abs.c_str(), "wb");
             }
 
-            state.matchIdxToStart[midx] = ftell(state.file);
-            ZipSyncAssert(state.matchIdxToStart[midx] >= 0);
+            size_t base = ftell(state.file);
+            state.baseToProvIdx[base] = provIdx;
             size_t written = fwrite(data, 1, bytes, state.file);
             ZipSyncAssert(written == bytes);
 
@@ -640,14 +645,15 @@ void UpdateProcess::DownloadRemoteFiles() {
         UnzFileIndexed zf;
         zf.reset(unzOpen(state.path.abs.c_str()));
 
-        for (const auto &pMO : state.matchIdxToStart) {
-            int matchIdx = pMO.first;
-            uint32_t offset = pMO.second;
-            Match &m = _matches[matchIdx];
+        for (const auto &pOI : state.baseToProvIdx) {
+            uint32_t offset = pOI.first;
+            int provIdx = pOI.second;
+            std::vector<int> matchIds = provIdxToMatchIds[provIdx];
+            ManifestIter provided(_providedMani, provIdx);
 
             //verify hash of the downloaded file (we must be sure that it is correct)
             //TODO: what if bad mirror changes file local header?...
-            uint32_t size = (m.provided->byterange[1] - m.provided->byterange[0]);
+            uint32_t size = (provided->byterange[1] - provided->byterange[0]);
             zf.LocateByByterange(offset, offset + size);
             SAFE_CALL(unzOpenCurrentFile2(zf, NULL, NULL, true));
             Hasher hasher;
@@ -665,11 +671,11 @@ void UpdateProcess::DownloadRemoteFiles() {
             HashDigest obtainedHash = hasher.Finalize();
             SAFE_CALL(unzCloseCurrentFile(zf));
 
-            const HashDigest &expectedHash = m.provided->compressedHash;
-            std::string fullPath = GetFullPath(url, m.provided->filename);
+            const HashDigest &expectedHash = provided->compressedHash;
+            std::string fullPath = GetFullPath(url, provided->filename);
             ZipSyncAssertF(obtainedHash == expectedHash, "Hash of \"%s\" after download is %s instead of %s", fullPath.c_str(), obtainedHash.Hex().c_str(), expectedHash.Hex().c_str());
 
-            FileMetainfo pf = *m.provided;
+            FileMetainfo pf = *provided;
             pf.zipPath = state.path;
             pf.byterange[0] = offset;
             pf.byterange[1] = offset + size;
@@ -677,7 +683,8 @@ void UpdateProcess::DownloadRemoteFiles() {
 
             int pi = _providedMani.size();
             _providedMani.AppendFile(pf);
-            m.provided = ManifestIter(_providedMani, pi);
+            for (int midx : matchIds)
+                _matches[midx].provided = ManifestIter(_providedMani, pi);
         }
     }
 
