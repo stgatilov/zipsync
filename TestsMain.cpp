@@ -613,16 +613,6 @@ TEST_CASE("UpdateProcess::DevelopPlan") {
     }
 }
 
-TEST_CASE("FuzzLocalInfinite"
-    * doctest::skip()
-) {
-    Fuzz((GetTempDir()).string(), -1, false);
-}
-
-TEST_CASE("FuzzLocal50") {
-    Fuzz((GetTempDir()).string(), 50, false);
-}
-
 static std::string CurlSimple(const std::string &url, const std::string &ranges = "", std::vector<int> wantedHttpCode = {200}) {
     auto WriteCallback = [](char *buffer, size_t size, size_t nitems, void *outstream) -> size_t {
         int bytes = size * nitems;
@@ -862,6 +852,22 @@ TEST_CASE("Downloader") {
     }
 }
 
+TEST_CASE("FuzzLocal50") {
+    Fuzz((GetTempDir()).string(), 50, false);
+}
+
 TEST_CASE("FuzzRemote50") {
     Fuzz((GetTempDir()).string(), 50, true);
+}
+
+TEST_CASE("FuzzLocalInfinite"
+    * doctest::skip()
+) {
+    Fuzz((GetTempDir()).string(), -1, false);
+}
+
+TEST_CASE("FuzzRemoteInfinite"
+    * doctest::skip()
+) {
+    Fuzz((GetTempDir()).string(), -1, true);
 }
