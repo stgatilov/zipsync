@@ -32,7 +32,8 @@ public:
 
     //set the root directory so serve files inside
     void SetRootDir(const std::string &root);
-    void SetBlockSize(int blockSize = 128*1024) { _blockSize = blockSize; }
+    void SetBlockSize(int blockSize = 128*1024);
+    std::string GetRootUrl() const;
 
     void Start();
     void Stop();

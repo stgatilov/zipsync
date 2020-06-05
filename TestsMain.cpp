@@ -13,6 +13,7 @@ using namespace ZipSync;
 
 #include <zip.h>
 #include <blake2.h>
+#include <curl/curl.h>
 
 
 #include <stdio.h>  /* defines FILENAME_MAX */
@@ -619,6 +620,84 @@ TEST_CASE("FuzzTemp"
 
 TEST_CASE("FuzzLocal50") {
     Fuzz((GetTempDir()).string(), 50);
+}
+
+std::string CurlSimple(const std::string &url, const std::string &ranges = "", std::vector<int> wantedHttpCode = {200}) {
+    auto WriteCallback = [](char *buffer, size_t size, size_t nitems, void *outstream) -> size_t {
+        std::string &data = *(std::string*)outstream;
+        data.append(buffer, size * nitems);
+        return size * nitems;
+    };
+    std::string data;
+    std::unique_ptr<CURL, void (*)(CURL*)> curl(curl_easy_init(), curl_easy_cleanup);
+    curl_easy_setopt(curl.get(), CURLOPT_URL, url.c_str());
+    if (!ranges.empty())
+        curl_easy_setopt(curl.get(), CURLOPT_RANGE, ranges.c_str());
+    curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, (curl_write_callback)WriteCallback);
+    curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, &data);
+    CURLcode res = curl_easy_perform(curl.get());
+    CHECK(res == CURLE_OK);
+    long httpRes = 0;
+    curl_easy_getinfo(curl.get(), CURLINFO_HTTP_CODE, &httpRes);
+    for (int i = 0; i < wantedHttpCode.size(); i++)
+        if (wantedHttpCode[i] == httpRes)
+            return data;
+    CHECK(std::vector<int>(1, httpRes) == wantedHttpCode);
+    return data;
+}
+
+TEST_CASE("HttpServer") {
+    static const char *TEST_TXT = "Hello, microhttpd!\n";
+    {
+        stdext::create_directories(GetTempDir());
+        StdioFileHolder test((GetTempDir() / "test.txt").string().c_str(), "wb");
+        fprintf(test, TEST_TXT);
+        StdioFileHolder identity((GetTempDir() / "identity.bin").string().c_str(), "wb");
+        for (int i = 0; i < 1000000; i++)
+            fwrite(&i, 1, 1, identity);
+        stdext::create_directories(GetTempDir() / "subdir");
+        StdioFileHolder numbers((GetTempDir() / "subdir" / "identity.bin").string().c_str(), "wb");
+        for (int i = 0; i < 100000; i++)
+            fprintf(numbers, "%d-th square is %d\n", i, i*i);
+    }
+
+    for (int blk = 0; blk < 2; blk++) {
+        HttpServer server;
+        if (blk == 0)
+            server.SetBlockSize(13);    //small block size to test stuff better
+        server.SetRootDir(GetTempDir().string());
+        server.Start();
+
+        CHECK(CurlSimple(server.GetRootUrl() + "test.txt") == std::string(TEST_TXT));
+        CurlSimple(server.GetRootUrl() + "badfilename.txt", "", {404});
+        CHECK(CurlSimple(server.GetRootUrl() + "test.txt", "3-9", {206}) == std::string(TEST_TXT).substr(3, 7));
+        CHECK(strlen(TEST_TXT) == 19);
+        CHECK(CurlSimple(server.GetRootUrl() + "test.txt", "0-18", {200,206}) == std::string(TEST_TXT));
+
+        std::string mpResp = CurlSimple(server.GetRootUrl() + "test.txt", "2-5,7-10,14-16", {206});
+        std::string mpRespExp = R"(
+--********72FFC411326F7C93
+Content-Range: bytes 2-5/19
+
+llo,
+--********72FFC411326F7C93
+Content-Range: bytes 7-10/19
+
+micr
+--********72FFC411326F7C93
+Content-Range: bytes 14-16/19
+
+tpd
+--********72FFC411326F7C93--
+)";     //note: must start and end with one EOL
+        std::string mpRespExp2;
+        for (int i = 0; i < mpRespExp.size(); i++) {
+            if (mpRespExp[i] == '\n')
+                mpRespExp2.push_back('\r');
+            mpRespExp2.push_back(mpRespExp[i]);
+        }
+        CHECK(mpResp == mpRespExp2);
+    }
 }
 
 //================================================================

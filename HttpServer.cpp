@@ -18,6 +18,14 @@ void HttpServer::SetRootDir(const std::string &root) {
     _rootDir = root;
 }
 
+std::string HttpServer::GetRootUrl() const {
+    return "http://localhost:" + std::to_string(PORT) + "/";
+}
+
+void HttpServer::SetBlockSize(int blockSize) {
+    _blockSize = blockSize;
+}
+
 void HttpServer::Stop() {
     if (!_daemon)
         return;
@@ -123,8 +131,7 @@ public:
         uint64_t outPos = 0;
         for (int i = 0; i < n; i++) {
             std::string header;
-            if (i)
-                header += "\r\n";
+            header += "\r\n";
             header += "--";
             header += _boundary;
             header += "\r\n";
@@ -137,7 +144,7 @@ public:
         std::string tail = "\r\n";
         tail += "--";
         tail += _boundary;
-        tail += "--";
+        tail += "--\r\n";
         _chunks.push_back(ChunkInfo::CreateWithData(outPos, tail));
         _totalContentSize = outPos;
     }
