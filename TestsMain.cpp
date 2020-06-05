@@ -9,6 +9,7 @@
 #include "ZipSync.h"
 #include "Fuzzer.h"
 #include "HttpServer.h"
+#include "Downloader.h"
 using namespace ZipSync;
 
 #include <zip.h>
@@ -622,11 +623,14 @@ TEST_CASE("FuzzLocal50") {
     Fuzz((GetTempDir()).string(), 50);
 }
 
-std::string CurlSimple(const std::string &url, const std::string &ranges = "", std::vector<int> wantedHttpCode = {200}) {
+static std::string CurlSimple(const std::string &url, const std::string &ranges = "", std::vector<int> wantedHttpCode = {200}) {
     auto WriteCallback = [](char *buffer, size_t size, size_t nitems, void *outstream) -> size_t {
+        int bytes = size * nitems;
         std::string &data = *(std::string*)outstream;
-        data.append(buffer, size * nitems);
-        return size * nitems;
+        if (data.size() + bytes > data.capacity())
+            data.reserve(data.capacity() * 2);
+        data.append(buffer, bytes);
+        return bytes;
     };
     std::string data;
     std::unique_ptr<CURL, void (*)(CURL*)> curl(curl_easy_init(), curl_easy_cleanup);
@@ -645,7 +649,7 @@ std::string CurlSimple(const std::string &url, const std::string &ranges = "", s
     CHECK(httpRes == wantedHttpCode[0]);
     return data;
 }
-std::string ReadWholeFile(const std::string &filename) {
+static std::string ReadWholeFile(const std::string &filename) {
     StdioFileHolder f(filename.c_str(), "rb");
     fseek(f.get(), 0, SEEK_END);
     int size = ftell(f.get());
@@ -656,19 +660,20 @@ std::string ReadWholeFile(const std::string &filename) {
     return std::string(res.begin(), res.end());
 }
 
+static void PrepareFilesForHttpServer() {
+    stdext::create_directories(GetTempDir());
+    StdioFileHolder test((GetTempDir() / "test.txt").string().c_str(), "wb");
+    fprintf(test, "Hello, microhttpd!\n");
+    StdioFileHolder identity((GetTempDir() / "identity.bin").string().c_str(), "wb");
+    for (int i = 0; i < 1000000; i++)
+        fwrite(&i, 1, 1, identity);
+    stdext::create_directories(GetTempDir() / "subdir");
+    StdioFileHolder numbers((GetTempDir() / "subdir" / "squares.txt").string().c_str(), "wb");
+    for (int i = 0; i < 100000; i++)
+        fprintf(numbers, "%d-th square is %d\n", i, i*i);
+}
 TEST_CASE("HttpServer") {
-    {
-        stdext::create_directories(GetTempDir());
-        StdioFileHolder test((GetTempDir() / "test.txt").string().c_str(), "wb");
-        fprintf(test, "Hello, microhttpd!\n");
-        StdioFileHolder identity((GetTempDir() / "identity.bin").string().c_str(), "wb");
-        for (int i = 0; i < 1000000; i++)
-            fwrite(&i, 1, 1, identity);
-        stdext::create_directories(GetTempDir() / "subdir");
-        StdioFileHolder numbers((GetTempDir() / "subdir" / "squares.txt").string().c_str(), "wb");
-        for (int i = 0; i < 100000; i++)
-            fprintf(numbers, "%d-th square is %d\n", i, i*i);
-    }
+    PrepareFilesForHttpServer();
     std::string DataTestTxt = ReadWholeFile((GetTempDir() / "test.txt").string());
     std::string DataIdentityBin = ReadWholeFile((GetTempDir() / "identity.bin").string());
     std::string DataSquaresTxt = ReadWholeFile((GetTempDir() / "subdir" / "squares.txt").string());
@@ -733,9 +738,122 @@ tpd
     }
 }
 
+TEST_CASE("Downloader") {
+    PrepareFilesForHttpServer();
+    std::string DataTestTxt = ReadWholeFile((GetTempDir() / "test.txt").string());
+    std::string DataIdentityBin = ReadWholeFile((GetTempDir() / "identity.bin").string());
+    std::string DataSquaresTxt = ReadWholeFile((GetTempDir() / "subdir" / "squares.txt").string());
+    auto CreateDownloadCallback = [](std::string &buffer) -> DownloadFinishedCallback {
+        return [&buffer](const void *ptr, uint32_t bytes) -> void {
+            buffer.assign((char*)ptr, (char*)ptr + bytes);
+        };
+    };
+
+    for (int blk = 0; blk < 2; blk++) {
+        HttpServer server;
+        if (blk == 0)
+            server.SetBlockSize(17);
+        server.SetRootDir(GetTempDir().string());
+        server.Start();
+
+        { //download all
+            Downloader down;
+            std::string data1, data2, data3;
+            down.EnqueueDownload(DownloadSource(server.GetRootUrl() + "test.txt"), CreateDownloadCallback(data1));
+            if (blk == 1) {
+                down.EnqueueDownload(DownloadSource(server.GetRootUrl() + "identity.bin"), CreateDownloadCallback(data2));
+                down.EnqueueDownload(DownloadSource(server.GetRootUrl() + "subdir/squares.txt"), CreateDownloadCallback(data3));
+            }
+            double progressRatio = -1.0;
+            int progressCnt = 0;
+            GlobalProgressCallback progressCallback = [&](double ratio, const char *message) {
+                if (progressCnt == 0)
+                    CHECK(ratio == 0.0);
+                CHECK(ratio >= progressRatio);
+                progressRatio = ratio;
+                progressCnt++;
+            };
+            down.SetProgressCallback(progressCallback);
+            down.DownloadAll();
+            CHECK(progressRatio == 1.0);
+            CHECK(data1 == DataTestTxt);
+            int totalDownloaded = down.TotalBytesDownloaded();
+            if (blk == 1) {
+                CHECK(data2 == DataIdentityBin);
+                CHECK(data3 == DataSquaresTxt);
+                CHECK(progressCnt >= 100);
+                int sumSize = DataTestTxt.size() + DataIdentityBin.size() + DataSquaresTxt.size();
+                CHECK(totalDownloaded == sumSize);
+            }
+        }
+
+        { //download ranges
+            Downloader down;
+            std::string data1, data2, data3;
+            down.EnqueueDownload(DownloadSource(server.GetRootUrl() + "test.txt", 2, 6), CreateDownloadCallback(data1));
+            down.EnqueueDownload(DownloadSource(server.GetRootUrl() + "test.txt", 7, 11), CreateDownloadCallback(data2));
+            down.EnqueueDownload(DownloadSource(server.GetRootUrl() + "test.txt", 14, 17), CreateDownloadCallback(data3));
+            down.DownloadAll();
+            CHECK(data1 == DataTestTxt.substr(2, 4));
+            CHECK(data2 == DataTestTxt.substr(7, 4));
+            CHECK(data3 == DataTestTxt.substr(14, 3));
+            int totalDownloaded = down.TotalBytesDownloaded();
+            CHECK(totalDownloaded >= 11);
+        }
+
+        { //check overlapping and single-range download
+            Downloader down;
+            std::string data[8];
+            down.EnqueueDownload(DownloadSource(server.GetRootUrl() + "test.txt", 2, 10), CreateDownloadCallback(data[0]));
+            down.EnqueueDownload(DownloadSource(server.GetRootUrl() + "test.txt", 7, 13), CreateDownloadCallback(data[1]));
+            down.EnqueueDownload(DownloadSource(server.GetRootUrl() + "identity.bin", 5000, 10000), CreateDownloadCallback(data[2]));
+            down.EnqueueDownload(DownloadSource(server.GetRootUrl() + "identity.bin", 6000, 7000), CreateDownloadCallback(data[3]));
+            down.EnqueueDownload(DownloadSource(server.GetRootUrl() + "subdir/squares.txt", 1000, 5000), CreateDownloadCallback(data[4]));
+            down.EnqueueDownload(DownloadSource(server.GetRootUrl() + "subdir/squares.txt", 3000, 4000), CreateDownloadCallback(data[5]));
+            down.EnqueueDownload(DownloadSource(server.GetRootUrl() + "subdir/squares.txt", 2000, 3000), CreateDownloadCallback(data[6]));
+            down.EnqueueDownload(DownloadSource(server.GetRootUrl() + "subdir/squares.txt", 6000, 7000), CreateDownloadCallback(data[7]));
+            down.DownloadAll();
+            CHECK(data[0] == DataTestTxt.substr(2, 8));
+            CHECK(data[1] == DataTestTxt.substr(7, 6));
+            CHECK(data[2] == DataIdentityBin.substr(5000, 5000));
+            CHECK(data[3] == DataIdentityBin.substr(6000, 1000));
+            CHECK(data[4] == DataSquaresTxt.substr(1000, 4000));
+            CHECK(data[5] == DataSquaresTxt.substr(3000, 1000));
+            CHECK(data[6] == DataSquaresTxt.substr(2000, 1000));
+            CHECK(data[7] == DataSquaresTxt.substr(6000, 1000));
+        }
+
+        { //download ranges from many files
+            Downloader down;
+            std::string data[10];
+            down.EnqueueDownload(DownloadSource(server.GetRootUrl() + "test.txt", 2, 10), CreateDownloadCallback(data[0]));
+            down.EnqueueDownload(DownloadSource(server.GetRootUrl() + "test.txt", 7, 13), CreateDownloadCallback(data[1]));
+            down.EnqueueDownload(DownloadSource(server.GetRootUrl() + "identity.bin", 10000, 11000), CreateDownloadCallback(data[2]));
+            down.EnqueueDownload(DownloadSource(server.GetRootUrl() + "test.txt", 16, 19), CreateDownloadCallback(data[3]));
+            down.EnqueueDownload(DownloadSource(server.GetRootUrl() + "identity.bin", 100000, 102000), CreateDownloadCallback(data[4]));
+            down.EnqueueDownload(DownloadSource(server.GetRootUrl() + "subdir/squares.txt", 12345, 54321), CreateDownloadCallback(data[5]));
+            down.EnqueueDownload(DownloadSource(server.GetRootUrl() + "identity.bin", 101000, 103000), CreateDownloadCallback(data[6]));
+            down.EnqueueDownload(DownloadSource(server.GetRootUrl() + "subdir/squares.txt", 50000, 60000), CreateDownloadCallback(data[7]));
+            down.EnqueueDownload(DownloadSource(server.GetRootUrl() + "subdir/squares.txt", 30000, 40000), CreateDownloadCallback(data[8]));
+            down.EnqueueDownload(DownloadSource(server.GetRootUrl() + "identity.bin", 50000, 55000), CreateDownloadCallback(data[9]));
+            down.DownloadAll();
+            CHECK(data[0] == DataTestTxt.substr(2, 8));
+            CHECK(data[1] == DataTestTxt.substr(7, 6));
+            CHECK(data[2] == DataIdentityBin.substr(10000, 1000));
+            CHECK(data[3] == DataTestTxt.substr(16, 3));
+            CHECK(data[4] == DataIdentityBin.substr(100000, 2000));
+            CHECK(data[5] == DataSquaresTxt.substr(12345, 54321-12345));
+            CHECK(data[6] == DataIdentityBin.substr(101000, 2000));
+            CHECK(data[7] == DataSquaresTxt.substr(50000, 10000));
+            CHECK(data[8] == DataSquaresTxt.substr(30000, 10000));
+            CHECK(data[9] == DataIdentityBin.substr(50000, 5000));
+        }
+    }
+}
+
 //================================================================
 
-TEST_CASE("microhttpd temp") {
+/*TEST_CASE("microhttpd temp") {
     {
         stdext::create_directories(GetTempDir());
         StdioFileHolder test((GetTempDir() / "test.txt").string().c_str(), "wt");
@@ -748,3 +866,4 @@ TEST_CASE("microhttpd temp") {
     while (1);
     server.Stop();
 }
+*/

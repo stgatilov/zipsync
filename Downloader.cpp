@@ -92,8 +92,8 @@ void Downloader::DownloadOneRequest(const std::string &url, const std::vector<in
     std::vector<std::pair<uint32_t, uint32_t>> coaslescedRanges;
     for (int idx : downloadIds) {
         const auto &down = _downloads[idx];
-        if (!coaslescedRanges.empty() && coaslescedRanges.back().second == down.src.byterange[0])
-            coaslescedRanges.back().second = down.src.byterange[1];
+        if (!coaslescedRanges.empty() && coaslescedRanges.back().second >= down.src.byterange[0])
+            coaslescedRanges.back().second = std::max(coaslescedRanges.back().second, down.src.byterange[1]);
         else
             coaslescedRanges.push_back(std::make_pair(down.src.byterange[0], down.src.byterange[1]));
     }
