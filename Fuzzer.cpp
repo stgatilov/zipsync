@@ -311,6 +311,43 @@ rank 	  lemma / word 	PoS 	freq 	dispersion
         return state;
     }
 
+    void TryAddFullZip(DirState &target, std::vector<DirState*> provided) {
+        if (IntD(0, 99)(_rnd) >= 40)
+            return;
+        int numZips = IntD(1, 2)(_rnd);
+        DirState added = GenTargetState(IntD(numZips, 4)(_rnd), numZips);
+
+        std::vector<std::string> zipnames;
+        for (const auto &zipPair : added)
+            zipnames.push_back(zipPair.first);
+        for (const auto &zipPair : target)
+            zipnames.push_back(zipPair.first);
+        for (auto *prov : provided)
+            for (const auto &zipPair : *prov)
+                zipnames.push_back(zipPair.first);
+
+        if (IntD(0, 99)(_rnd) < 50) {
+            DirState ns;
+            for (auto &zipPair : added) {
+                std::string newName = RandomFrom(zipnames);
+                ns[newName] = zipPair.second;
+            }
+            added = ns;
+        }
+
+        for (const auto &zipPair : added) {
+            for (const auto &filePair : zipPair.second)
+                target[zipPair.first].push_back(filePair);
+            int mult = IntD(1, 2)(_rnd);
+            for (int i = 0; i < mult; i++) {
+                DirState &other = *RandomFrom(provided);
+                std::string zipName = (IntD(0, 99)(_rnd) < 50 ? GenPaths(1, ".zip")[0] : RandomFrom(zipnames));
+                for (const auto &filePair : zipPair.second)
+                    other[zipName].push_back(filePair);
+            }
+        }
+    }
+
     bool AddMissingFiles(const DirState &target, std::vector<DirState*> provided, bool leaveMisses = false) {
         std::vector<const InZipFile*> targetFiles;
         for (const auto &zipPair : target)
@@ -545,6 +582,7 @@ public:
         _initialTargetState = GenTargetState(50, 10);
         _initialInplaceState = GenMutatedState(_initialTargetState);
         _initialAllSourcesState = GenMutatedState(_initialTargetState);
+        TryAddFullZip(_initialTargetState, {&_initialInplaceState, &_initialAllSourcesState});
         _shouldUpdateSucceed = AddMissingFiles(_initialTargetState, {&_initialInplaceState, &_initialAllSourcesState}, true);
         _initialSourceState.assign(_rootSources.size(), {});
         SplitState(_initialAllSourcesState, _initialSourceState);
