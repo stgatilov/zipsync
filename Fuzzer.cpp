@@ -582,10 +582,12 @@ public:
         _initialTargetState = GenTargetState(50, 10);
         _initialInplaceState = GenMutatedState(_initialTargetState);
         _initialAllSourcesState = GenMutatedState(_initialTargetState);
-        TryAddFullZip(_initialTargetState, {&_initialInplaceState, &_initialAllSourcesState});
-        _shouldUpdateSucceed = AddMissingFiles(_initialTargetState, {&_initialInplaceState, &_initialAllSourcesState}, true);
         _initialSourceState.assign(_rootSources.size(), {});
         SplitState(_initialAllSourcesState, _initialSourceState);
+        std::vector<DirState*> provStates = {&_initialInplaceState};
+        for (auto &s : _initialSourceState) provStates.push_back(&s);
+        TryAddFullZip(_initialTargetState, provStates);
+        _shouldUpdateSucceed = AddMissingFiles(_initialTargetState, provStates, true);
 
         _numCasesGenerated++;
     }
