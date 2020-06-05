@@ -5,6 +5,6 @@
 
 namespace ZipSync {
 
-void Fuzz(std::string where, int casesNum = -1);
+void Fuzz(std::string where, int casesNum, bool enableRemote);
 
 }

@@ -613,14 +613,14 @@ TEST_CASE("UpdateProcess::DevelopPlan") {
     }
 }
 
-TEST_CASE("FuzzTemp"
+TEST_CASE("FuzzLocalInfinite"
     * doctest::skip()
 ) {
-    Fuzz((GetTempDir()).string());
+    Fuzz((GetTempDir()).string(), -1, false);
 }
 
 TEST_CASE("FuzzLocal50") {
-    Fuzz((GetTempDir()).string(), 50);
+    Fuzz((GetTempDir()).string(), 50, false);
 }
 
 static std::string CurlSimple(const std::string &url, const std::string &ranges = "", std::vector<int> wantedHttpCode = {200}) {
@@ -862,19 +862,6 @@ TEST_CASE("Downloader") {
     }
 }
 
-//================================================================
-
-/*TEST_CASE("microhttpd temp") {
-    {
-        stdext::create_directories(GetTempDir());
-        StdioFileHolder test((GetTempDir() / "test.txt").string().c_str(), "wt");
-        fprintf(test, "Hello, microhttpd!\n");
-        fflush(test);
-    }
-    HttpServer server;
-    server.SetRootDir(GetTempDir().string());
-    server.Start();
-    while (1);
-    server.Stop();
+TEST_CASE("FuzzRemote50") {
+    Fuzz((GetTempDir()).string(), 50, true);
 }
-*/

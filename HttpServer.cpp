@@ -13,13 +13,18 @@ HttpServer::~HttpServer() {
 }
 HttpServer::HttpServer() {
     SetBlockSize();
+    SetPortNumber();
 }
+
 void HttpServer::SetRootDir(const std::string &root) {
     _rootDir = root;
 }
+void HttpServer::SetPortNumber(int port) {
+    _port = port;
+}
 
 std::string HttpServer::GetRootUrl() const {
-    return "http://localhost:" + std::to_string(PORT) + "/";
+    return "http://localhost:" + std::to_string(_port) + "/";
 }
 
 void HttpServer::SetBlockSize(int blockSize) {
@@ -38,14 +43,14 @@ void HttpServer::Start() {
         return;
     _daemon = MHD_start_daemon(
         MHD_USE_THREAD_PER_CONNECTION,
-        PORT,
+        _port,
         NULL,
         NULL,
         &MhdFunction,
         this,
         MHD_OPTION_END
     );
-    ZipSyncAssertF(_daemon, "Failed to start microhttpd on port %d", PORT);
+    ZipSyncAssertF(_daemon, "Failed to start microhttpd on port %d", _port);
 }
 
 int HttpServer::MhdFunction(

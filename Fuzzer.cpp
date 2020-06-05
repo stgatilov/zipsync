@@ -8,6 +8,7 @@
 #include "StdFilesystem.h"
 #include "ZSAssert.h"
 #include "ZipSync.h"
+#include "HttpServer.h"
 #include <zip.h>
 #include <functional>
 
@@ -20,8 +21,8 @@ typedef std::uniform_real_distribution<double> DblD;
 //==========================================================================================
 
 class FuzzerGenerator {
-    std::mt19937 _rnd;
 protected:
+    std::mt19937 _rnd;
     UpdateType _updateType = UpdateType::SameCompressed;
 
 public:
@@ -355,6 +356,24 @@ rank 	  lemma / word 	PoS 	freq 	dispersion
         return surelySucceed;
     }
 
+    void SplitState(const DirState &full, std::vector<DirState> &parts) {
+        int n = parts.size();
+        for (int i = 0; i < n; i++)
+             parts[i].clear();
+        std::vector<char> used;
+        for (const auto &zipPair : full)
+            for (const auto &filePair : zipPair.second) {
+                int q = (IntD(0, 99)(_rnd) < 25 ? 2 : 1);
+                used.assign(n, false);
+                for (int j = 0; j < q; j++) {
+                    int x = IntD(0, n-1)(_rnd);
+                    if (used[x]) continue;
+                    used[x] = true;
+                    parts[x][zipPair.first].push_back(filePair);
+                }
+            }
+    }
+
     static bool ArePathsCaseAliased(std::string pathA, std::string pathB) {
 #ifndef _WIN32
         return false;  //case-sensitive
@@ -385,9 +404,10 @@ rank 	  lemma / word 	PoS 	freq 	dispersion
         return false;
     }
 
-    void WriteState(const std::string &rootPath, const DirState &state, Manifest *mani) {
+    void WriteState(const std::string &localRoot, const std::string &remoteRoot, const DirState &state, Manifest *mani) {
+        Manifest addedMani;
         for (const auto &zipPair : state) {
-            PathAR zipPath = PathAR::FromRel(zipPair.first, rootPath);
+            PathAR zipPath = PathAR::FromRel(zipPair.first, localRoot);
             stdext::create_directories(stdext::path(zipPath.abs).parent_path());
 
             //note: minizip's unzip cannot work with empty zip files
@@ -408,30 +428,41 @@ rank 	  lemma / word 	PoS 	freq 	dispersion
             }
             zf.reset();
 
-            if (mani)
-                mani->AppendLocalZip(zipPath.abs, rootPath, "default");
+            addedMani.AppendLocalZip(zipPath.abs, localRoot, "default");
         }
+        addedMani.ReRoot(remoteRoot);
+        if (mani)
+            mani->AppendManifest(addedMani);
     }
 };
 
 //==========================================================================================
 
 class Fuzzer : private FuzzerGenerator {
+    struct SourcePath {
+        std::string localDir;
+        std::string urlDir;     //same as localDir if used locally
+    };
     //directories where everything happens
     std::string _baseDir;
     std::string _rootTargetDir;
     std::string _rootInplaceDir;
-    std::string _rootLocalDir;
+    std::vector<SourcePath> _rootSources;       //includes local and remote directories
 
     //directory contents: generated randomly
     DirState _initialTargetState;
     DirState _initialInplaceState;
-    DirState _initialLocalState;
+    DirState _initialAllSourcesState;
+    std::vector<DirState> _initialSourceState;
     bool _shouldUpdateSucceed;
 
     //initial manifests passed to the updater
     Manifest _initialTargetMani;
     Manifest _initialProvidedMani;
+
+    //http servers (serving content for remote directories)
+    bool _remoteEnabled = false;
+    std::vector<std::unique_ptr<HttpServer>> _httpServers;
 
     //the update class
     std::unique_ptr<UpdateProcess> _updater;
@@ -449,7 +480,7 @@ class Fuzzer : private FuzzerGenerator {
 
     void AssertManifestsSame(IniData &&iniDataA, std::string dumpFnA, IniData &&iniDataB, std::string dumpFnB, bool ignoreCompressedHash = false, bool ignoreByterange = false) const {
         auto ClearCompressedHash = [&](IniData &ini) {
-            for (auto& pSect : ini)
+            for (auto& pSect : ini) {
                 for (auto &pProp : pSect.second) {
                     if (ignoreCompressedHash) {
                         if (pProp.first == "compressedHash" || pProp.first == "compressedSize")
@@ -462,6 +493,12 @@ class Fuzzer : private FuzzerGenerator {
                     if (pProp.first == "package")
                         pProp.second = "(removed)";
                 }
+                if (pSect.first.find("__download") != std::string::npos) {
+                    for (auto &pProp : pSect.second)
+                        if (pProp.first == "internalAttribs" || pProp.first == "externalAttribs")
+                            pProp.second = "(removed)";
+                }
+            }
         };
         ClearCompressedHash(iniDataA);
         ClearCompressedHash(iniDataB);
@@ -473,19 +510,44 @@ class Fuzzer : private FuzzerGenerator {
     }
 
 public:
+    void SetRemoteEnabled(bool enabled) {
+        _remoteEnabled = enabled;
+        while (_remoteEnabled && _httpServers.size() < 3) {
+            int idx = _httpServers.size();
+            _httpServers.emplace_back(new HttpServer());
+            _httpServers[idx]->SetPortNumber(HttpServer::PORT_DEFAULT + idx);
+            _httpServers[idx]->SetBlockSize(30 + idx * 7);   //for more extensive testing 
+            _httpServers[idx]->Start();
+        }
+        while (!_remoteEnabled && _httpServers.size() > 0)
+            _httpServers.pop_back();
+    }
+
     void GenerateInput(std::string baseDir, int seed) {
         _baseDir = baseDir;
+        SetSeed(seed);
+
         _rootTargetDir = _baseDir + "/target";
         _rootInplaceDir = _baseDir + "/inplace";
-        _rootLocalDir = _baseDir + "/local";
+        _rootSources.clear();
+        _rootSources.push_back(SourcePath{_baseDir + "/local", _baseDir + "/local"});
+        if (_remoteEnabled) {
+            int k = IntD(0, 2)(_rnd);
+            for (int i = 0; i < k; i++) {
+                SourcePath sp = {_baseDir + "/remote" + std::to_string(i), _httpServers[i]->GetRootUrl()};
+                _rootSources.push_back(sp);
+                _httpServers[i]->SetRootDir(sp.localDir);
+            }
+        }
 
-        SetSeed(seed);
         SetUpdateType(seed % 2 ? UpdateType::SameCompressed : UpdateType::SameContents);
 
         _initialTargetState = GenTargetState(50, 10);
         _initialInplaceState = GenMutatedState(_initialTargetState);
-        _initialLocalState = GenMutatedState(_initialTargetState);
-        _shouldUpdateSucceed = AddMissingFiles(_initialTargetState, {&_initialInplaceState, &_initialLocalState}, true);
+        _initialAllSourcesState = GenMutatedState(_initialTargetState);
+        _shouldUpdateSucceed = AddMissingFiles(_initialTargetState, {&_initialInplaceState, &_initialAllSourcesState}, true);
+        _initialSourceState.assign(_rootSources.size(), {});
+        SplitState(_initialAllSourcesState, _initialSourceState);
 
         _numCasesGenerated++;
     }
@@ -494,7 +556,7 @@ public:
         bool aliased = (
             CheckForCaseAliasing(_initialTargetState, _initialTargetState) ||
             CheckForCaseAliasing(_initialInplaceState, _initialInplaceState) ||
-            CheckForCaseAliasing(_initialLocalState, _initialLocalState)
+            CheckForCaseAliasing(_initialAllSourcesState, _initialAllSourcesState)
         );
         if (aliased) {
             //some of the directories is expected to contain case-aliased paths: skip such case
@@ -513,9 +575,10 @@ public:
     void WriteInput() {
         _initialTargetMani.Clear();
         _initialProvidedMani.Clear();
-        WriteState(_rootTargetDir, _initialTargetState, &_initialTargetMani);
-        WriteState(_rootInplaceDir, _initialInplaceState, &_initialProvidedMani);
-        WriteState(_rootLocalDir, _initialLocalState, &_initialProvidedMani);
+        WriteState(_rootTargetDir, _rootTargetDir, _initialTargetState, &_initialTargetMani);
+        WriteState(_rootInplaceDir, _rootInplaceDir, _initialInplaceState, &_initialProvidedMani);
+        for (int i = 0; i < _rootSources.size(); i++)
+            WriteState(_rootSources[i].localDir, _rootSources[i].urlDir, _initialSourceState[i], &_initialProvidedMani);
     }
 
     bool DoUpdate() {
@@ -538,7 +601,11 @@ public:
         double moreSuccessRatio = double(_numCasesActualSucceed - _numCasesShouldSucceed) / std::max(_numCasesValidated, 200);
         ZipSyncAssert(moreSuccessRatio <= 0.05);    //actually, this ratio is smaller than 1%
         
+        if (_remoteEnabled)
+            _updater->DownloadRemoteFiles();
+
         _updater->RepackZips();
+
         return true;
     }
 
@@ -553,7 +620,7 @@ public:
         for (stdext::path filePath : resultPaths) {
             if (!stdext::is_regular_file(filePath))
                 continue;
-            if (!stdext::starts_with(filePath.filename().string(), "__reduced__")) {
+            if (!stdext::starts_with(filePath.filename().string(), "__reduced__") && !stdext::starts_with(filePath.filename().string(), "__download")) {
                 _finalActualTargetMani.AppendLocalZip(filePath.string(), _rootInplaceDir, "default");
             }
             _finalActualProvidedMani.AppendLocalZip(filePath.string(), _rootInplaceDir, "default");
@@ -593,12 +660,13 @@ public:
 
 //==========================================================================================
 
-void Fuzz(std::string where, int casesNum) {
+void Fuzz(std::string where, int casesNum, bool enableRemote) {
     static const int SPECIAL_SEEDS[] = {8573};
     int SK = sizeof(SPECIAL_SEEDS) / sizeof(SPECIAL_SEEDS[0]);
     if (casesNum < 0)
         casesNum = 1000000000;  //infinite
     Fuzzer fuzz;
+    fuzz.SetRemoteEnabled(enableRemote);
     for (int attempt = -SK; attempt < casesNum; attempt++) {
         int seed = (attempt < 0 ? SPECIAL_SEEDS[attempt + SK] : attempt);
         bool duplicate = false;

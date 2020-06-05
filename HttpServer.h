@@ -21,10 +21,12 @@ namespace ZipSync {
 class HttpServer {
     std::string _rootDir;
     MHD_Daemon *_daemon = nullptr;
-    int _blockSize = 0;
+    int _port = -1;
+    int _blockSize = -1;
 
 public:
-    static const int PORT = 8090;
+    static const int PORT_DEFAULT = 8090;
+
     HttpServer();
     ~HttpServer();
     HttpServer(const HttpServer &) = delete;
@@ -32,6 +34,7 @@ public:
 
     //set the root directory so serve files inside
     void SetRootDir(const std::string &root);
+    void SetPortNumber(int port = PORT_DEFAULT);
     void SetBlockSize(int blockSize = 128*1024);
     std::string GetRootUrl() const;
 
