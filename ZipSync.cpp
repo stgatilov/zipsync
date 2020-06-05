@@ -583,6 +583,7 @@ void UpdateProcess::DownloadRemoteFiles() {
 
     std::map<std::string, UrlData> urlStates;
     Downloader downloader;
+    std::set<std::string> downloadedFilenames;
     for (int midx = 0; midx < _matches.size(); midx++) {
         const Match &m = _matches[midx];
         if (m.provided->location != FileLocation::RemoteHttp)
@@ -593,9 +594,12 @@ void UpdateProcess::DownloadRemoteFiles() {
         if (fn.abs.empty()) {
             for (int t = 0; t < 100; t++) {
                 fn = PathAR::FromRel(PrefixFile(m.provided->zipPath.rel, "__download" + std::to_string(t) + "__"), _rootDir);
+                if (downloadedFilenames.count(fn.abs))
+                    continue;
                 if (!IfFileExists(fn.abs))
                     break;
             }
+            downloadedFilenames.insert(fn.abs);
         }
         urlStates[url].totalCount++;
 
