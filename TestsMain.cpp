@@ -642,24 +642,36 @@ std::string CurlSimple(const std::string &url, const std::string &ranges = "", s
     for (int i = 0; i < wantedHttpCode.size(); i++)
         if (wantedHttpCode[i] == httpRes)
             return data;
-    CHECK(std::vector<int>(1, httpRes) == wantedHttpCode);
+    CHECK(httpRes == wantedHttpCode[0]);
     return data;
+}
+std::string ReadWholeFile(const std::string &filename) {
+    StdioFileHolder f(filename.c_str(), "rb");
+    fseek(f.get(), 0, SEEK_END);
+    int size = ftell(f.get());
+    fseek(f.get(), 0, SEEK_SET);
+    std::vector<char> res;
+    res.resize(size);
+    fread(res.data(), 1, size, f.get());
+    return std::string(res.begin(), res.end());
 }
 
 TEST_CASE("HttpServer") {
-    static const char *TEST_TXT = "Hello, microhttpd!\n";
     {
         stdext::create_directories(GetTempDir());
         StdioFileHolder test((GetTempDir() / "test.txt").string().c_str(), "wb");
-        fprintf(test, TEST_TXT);
+        fprintf(test, "Hello, microhttpd!\n");
         StdioFileHolder identity((GetTempDir() / "identity.bin").string().c_str(), "wb");
         for (int i = 0; i < 1000000; i++)
             fwrite(&i, 1, 1, identity);
         stdext::create_directories(GetTempDir() / "subdir");
-        StdioFileHolder numbers((GetTempDir() / "subdir" / "identity.bin").string().c_str(), "wb");
+        StdioFileHolder numbers((GetTempDir() / "subdir" / "squares.txt").string().c_str(), "wb");
         for (int i = 0; i < 100000; i++)
             fprintf(numbers, "%d-th square is %d\n", i, i*i);
     }
+    std::string DataTestTxt = ReadWholeFile((GetTempDir() / "test.txt").string());
+    std::string DataIdentityBin = ReadWholeFile((GetTempDir() / "identity.bin").string());
+    std::string DataSquaresTxt = ReadWholeFile((GetTempDir() / "subdir" / "squares.txt").string());
 
     for (int blk = 0; blk < 2; blk++) {
         HttpServer server;
@@ -668,11 +680,13 @@ TEST_CASE("HttpServer") {
         server.SetRootDir(GetTempDir().string());
         server.Start();
 
-        CHECK(CurlSimple(server.GetRootUrl() + "test.txt") == std::string(TEST_TXT));
+        CHECK(CurlSimple(server.GetRootUrl() + "test.txt") == DataTestTxt);
         CurlSimple(server.GetRootUrl() + "badfilename.txt", "", {404});
-        CHECK(CurlSimple(server.GetRootUrl() + "test.txt", "3-9", {206}) == std::string(TEST_TXT).substr(3, 7));
-        CHECK(strlen(TEST_TXT) == 19);
-        CHECK(CurlSimple(server.GetRootUrl() + "test.txt", "0-18", {200,206}) == std::string(TEST_TXT));
+        CHECK(CurlSimple(server.GetRootUrl() + "test.txt", "3-9", {206}) == DataTestTxt.substr(3, 7));
+        CHECK(CurlSimple(server.GetRootUrl() + "test.txt", "3-", {206}) == DataTestTxt.substr(3));
+        CHECK(CurlSimple(server.GetRootUrl() + "test.txt", "13-13", {206}) == DataTestTxt.substr(13, 1));
+        CHECK(DataTestTxt.size() == 19);
+        CHECK(CurlSimple(server.GetRootUrl() + "test.txt", "0-18", {200,206}) == DataTestTxt);
 
         std::string mpResp = CurlSimple(server.GetRootUrl() + "test.txt", "2-5,7-10,14-16", {206});
         std::string mpRespExp = R"(
@@ -697,6 +711,25 @@ tpd
             mpRespExp2.push_back(mpRespExp[i]);
         }
         CHECK(mpResp == mpRespExp2);
+
+        CurlSimple(server.GetRootUrl() + "test.txt", "5-2", {416});
+        CurlSimple(server.GetRootUrl() + "test.txt", "-3-2", {416});
+        CurlSimple(server.GetRootUrl() + "test.txt", "-2", {416});
+        CurlSimple(server.GetRootUrl() + "test.txt", "23", {416});
+        CurlSimple(server.GetRootUrl() + "test.txt", "2fg", {416});
+        CurlSimple(server.GetRootUrl() + "test.txt", "0-100", {416});
+        CurlSimple(server.GetRootUrl() + "test.txt", "0-3,10-7", {416});
+        CurlSimple(server.GetRootUrl() + "test.txt", "0-5,5-7", {416});
+        CurlSimple(server.GetRootUrl() + "test.txt", "0-5,5-7", {416});
+
+        if (blk == 1) CHECK(CurlSimple(server.GetRootUrl() + "subdir/squares.txt") == DataSquaresTxt);
+        CHECK(CurlSimple(server.GetRootUrl() + "subdir/squares.txt", "1000000-1000100", {206}) == DataSquaresTxt.substr(1000000, 101));
+        if (blk == 1) CHECK(CurlSimple(server.GetRootUrl() + "subdir/squares.txt", "500000-1500000", {206}) == DataSquaresTxt.substr(500000, 1000001));
+
+        if (blk == 1) CHECK(CurlSimple(server.GetRootUrl() + "identity.bin") == DataIdentityBin);
+        CHECK(CurlSimple(server.GetRootUrl() + "identity.bin", "256-512", {206}) == DataIdentityBin.substr(256, 257));
+        CHECK(CurlSimple(server.GetRootUrl() + "identity.bin", "5000-15678", {206}) == DataIdentityBin.substr(5000, 10679));
+        if (blk == 1) CHECK(CurlSimple(server.GetRootUrl() + "identity.bin", "123456-654321", {206}) == DataIdentityBin.substr(123456, 654321-123456+1));
     }
 }
 

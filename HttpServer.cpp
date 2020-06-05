@@ -199,7 +199,7 @@ static int ReturnWithErrorResponse(MHD_Connection *connection, int httpCode, con
     );
     int ret = MHD_queue_response(
         connection,
-        MHD_HTTP_NOT_FOUND,
+        httpCode,
         response
     );
     return ret;
