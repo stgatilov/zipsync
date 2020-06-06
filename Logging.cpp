@@ -3,6 +3,20 @@
 
 namespace ZipSync {
 
+class LoggerConsole : public Logger {
+public:
+    virtual void Message(int code, Severity severity, const char *message) override {
+        printf("%s%s\n",
+            severity == sevFatal ? "FATAL: " :
+            severity == sevError ? "ERROR: " :
+            severity == sevWarning ? "Warning: " : "",
+            message
+        );
+    }
+};
+
+Logger *g_logger = new LoggerConsole();
+
 ErrorException::ErrorException(const char *message, int code) :
     std::runtime_error(message), _code(code)
 {}
@@ -11,7 +25,11 @@ void Logger::logv(Severity severity, int code, const char *format, va_list args)
     char buff[16<<10];
     vsnprintf(buff, sizeof(buff), format, args);
     buff[sizeof(buff)-1] = 0;
-    PostMessage(code, severity, buff);
+    Message(code, severity, buff);
+    if (severity == sevFatal)
+        std::terminate();
+    if (severity == sevError)
+        throw ErrorException(buff, code);
 }
 void Logger::logf(Severity severity, int code, const char *format, ...) {
     va_list args;

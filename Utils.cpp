@@ -12,7 +12,8 @@ StdioFileHolder::StdioFileHolder(FILE *f)
 StdioFileHolder::StdioFileHolder(const char *path, const char *mode)
     : StdioFileUniquePtr(fopen(path, mode), fclose)
 {
-    ZipSyncAssertF(get(), "Failed to open file \"%s\"", path);
+    if (!get())
+        g_logger->errorf(lcCantOpenFile, "Failed to open file \"%s\"", path);
 }
 
 }

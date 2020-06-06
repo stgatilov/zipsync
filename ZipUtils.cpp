@@ -19,7 +19,8 @@ UnzFileHolder::UnzFileHolder(unzFile zf)
 UnzFileHolder::UnzFileHolder(const char *path)
     : UnzFileUniquePtr(unzOpen(path), unzClose)
 {
-    ZipSyncAssertF(get(), "Failed to open zip file \"%s\"", path);
+    if (!get())
+        g_logger->errorf(lcCantOpenFile, "Failed to open zip file \"%s\"", path);
 }
 
 ZipFileHolder::~ZipFileHolder()
@@ -34,15 +35,9 @@ ZipFileHolder::ZipFileHolder(const char *path)
     if (IfFileExists(path))
         RemoveFile(path);
     reset(zipOpen(path, 0));
-    ZipSyncAssertF(get(), "Failed to open zip file \"%s\"", path);
+    if (!get())
+        g_logger->errorf(lcCantOpenFile, "Failed to open zip file \"%s\"", path);
 }
-
-MinizipError::MinizipError(int errcode)
-    : ErrorException(("Minizip error " + std::to_string(errcode)).c_str(), lcMinizipError)
-{}
-MinizipError::~MinizipError()
-{}
-
 
 void unzGetCurrentFilePosition(unzFile zf, uint32_t *localHeaderStart, uint32_t *fileDataStart, uint32_t *fileDataEnd) {
     unz_file_info info;

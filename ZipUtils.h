@@ -38,22 +38,13 @@ public:
 
 
 /**
- * ZipSync exception thrown when minizip function reports error.
- * Automatically throw by SAFE_CALL macro.
- */
-class MinizipError : public ErrorException {
-public:
-    MinizipError(int errcode);
-    ~MinizipError();
-};
-/**
  * Performs whatever call you wrap into it and checks its return code.
  * If the return code is nonzero, then exception is thrown.
  */
 #define SAFE_CALL(...) \
     do { \
         int mz_errcode = __VA_ARGS__; \
-        if (mz_errcode != 0) throw MinizipError(mz_errcode); \
+        if (mz_errcode != 0) g_logger->errorf(lcMinizipError, "Minizip error %d", mz_errcode); \
     } while (0)
 
 
