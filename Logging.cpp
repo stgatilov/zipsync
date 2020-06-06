@@ -5,7 +5,7 @@ namespace ZipSync {
 
 class LoggerConsole : public Logger {
 public:
-    virtual void Message(int code, Severity severity, const char *message) override {
+    virtual void Message(LogCode code, Severity severity, const char *message) override {
         printf("%s%s\n",
             severity == sevFatal ? "FATAL: " :
             severity == sevError ? "ERROR: " :
@@ -21,7 +21,7 @@ ErrorException::ErrorException(const char *message, int code) :
     std::runtime_error(message), _code(code)
 {}
 
-void Logger::logv(Severity severity, int code, const char *format, va_list args) {
+void Logger::logv(Severity severity, LogCode code, const char *format, va_list args) {
     char buff[16<<10];
     vsnprintf(buff, sizeof(buff), format, args);
     buff[sizeof(buff)-1] = 0;
@@ -31,7 +31,7 @@ void Logger::logv(Severity severity, int code, const char *format, va_list args)
     if (severity == sevError)
         throw ErrorException(buff, code);
 }
-void Logger::logf(Severity severity, int code, const char *format, ...) {
+void Logger::logf(Severity severity, LogCode code, const char *format, ...) {
     va_list args;
     va_start(args, format);
     logv(severity, code, format, args);
@@ -39,12 +39,12 @@ void Logger::logf(Severity severity, int code, const char *format, ...) {
 }
 
 #define LOGHELPER(severity) va_list args; va_start(args, format); logv(severity, code, format, args); va_end(args);
-void Logger::verbosef   (int code, const char *format, ...) { LOGHELPER(sevVerbose); }
-void Logger::debugf     (int code, const char *format, ...) { LOGHELPER(sevDebug); }
-void Logger::infof      (int code, const char *format, ...) { LOGHELPER(sevInfo); }
-void Logger::warningf   (int code, const char *format, ...) { LOGHELPER(sevWarning); }
-void Logger::errorf     (int code, const char *format, ...) { LOGHELPER(sevError); }
-void Logger::fatalf     (int code, const char *format, ...) { LOGHELPER(sevFatal); }
+void Logger::verbosef   (LogCode code, const char *format, ...) { LOGHELPER(sevVerbose); }
+void Logger::debugf     (LogCode code, const char *format, ...) { LOGHELPER(sevDebug); }
+void Logger::infof      (LogCode code, const char *format, ...) { LOGHELPER(sevInfo); }
+void Logger::warningf   (LogCode code, const char *format, ...) { LOGHELPER(sevWarning); }
+void Logger::errorf     (LogCode code, const char *format, ...) { LOGHELPER(sevError); }
+void Logger::fatalf     (LogCode code, const char *format, ...) { LOGHELPER(sevFatal); }
 #undef LOGHELPER
 #define LOGHELPER(severity) va_list args; va_start(args, format); logv(severity, lcGeneric, format, args); va_end(args);
 void Logger::verbosef   (const char *format, ...) { LOGHELPER(sevVerbose); }

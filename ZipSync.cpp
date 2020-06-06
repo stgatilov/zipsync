@@ -270,6 +270,7 @@ public:
 
             //note: we can rename source zip into target zip directly
             //this would substitute both repacking and reducing
+            g_logger->infof(lcRenameZipWithoutRepack, "Renaming %s to %s without repacking...", srcZip._zipPath.c_str(), dstZip._zipPathRepacked.c_str());
 
             //do the physical action
             CreateDirectoriesForFile(dstZip._zipPath, _owner._rootDir);
@@ -297,6 +298,8 @@ public:
     }
 
     void RepackZip(ZipInfo &zip) {
+        g_logger->infof(lcRepackZip, "Repacking %s...\n", zip._zipPathRepacked.c_str());
+
         //ensure all directories are created if missing
         CreateDirectoriesForFile(zip._zipPath, _owner._rootDir);
         //create new zip archive (it will contain results of repacking)

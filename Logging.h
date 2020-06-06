@@ -19,9 +19,14 @@ enum Severity {
 //it allows intercepting them in error exceptions and in tests
 enum LogCode {
     lcGeneric = 0,
+
     lcAssertFailed,             //ZipSyncAssert has failed
     lcCantOpenFile,             //unexpected fail when opening file
     lcMinizipError,             //unexpected error from minizip function
+
+    //the remaining log codes are intercepted during testing
+    lcRenameZipWithoutRepack,
+    lcRepackZip,
 };
 
 //thrown when message with "error" severity is posted
@@ -35,17 +40,17 @@ public:
 //base class of Logger
 class Logger {
 public:
-    virtual void Message(int code, Severity severity, const char *message) = 0;
+    virtual void Message(LogCode code, Severity severity, const char *message) = 0;
 
-    void logf(Severity severity, int code, const char *format, ...);
-    void logv(Severity severity, int code, const char *format, va_list args);
+    void logf(Severity severity, LogCode code, const char *format, ...);
+    void logv(Severity severity, LogCode code, const char *format, va_list args);
 
-                 void verbosef   (int code, const char *format, ...);
-                 void debugf     (int code, const char *format, ...);
-                 void infof      (int code, const char *format, ...);
-                 void warningf   (int code, const char *format, ...);
-    [[noreturn]] void errorf     (int code, const char *format, ...);
-    [[noreturn]] void fatalf     (int code, const char *format, ...);
+                 void verbosef   (LogCode code, const char *format, ...);
+                 void debugf     (LogCode code, const char *format, ...);
+                 void infof      (LogCode code, const char *format, ...);
+                 void warningf   (LogCode code, const char *format, ...);
+    [[noreturn]] void errorf     (LogCode code, const char *format, ...);
+    [[noreturn]] void fatalf     (LogCode code, const char *format, ...);
 
                  void verbosef   (const char *format, ...);
                  void debugf     (const char *format, ...);

@@ -1,4 +1,4 @@
-#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
+#define DOCTEST_CONFIG_IMPLEMENT
 #include <doctest/doctest.h>
 
 #include <random>
@@ -36,6 +36,16 @@ stdext::path GetTempDir() {
     static stdext::path where = GetCwd() / "__temp__" / std::to_string(timestamp);
     return where;
 }
+struct LoggerTest : Logger {
+    std::map<LogCode, int> counts;
+    void Message(LogCode code, Severity severity, const char *message) override {
+        counts[code]++;
+    }
+    void clear() {
+        counts.clear();
+    }
+};
+LoggerTest *g_testLogger = new LoggerTest();
 
 
 TEST_CASE("Paths") {
@@ -855,40 +865,51 @@ TEST_CASE("Downloader") {
 TEST_CASE("CleanInstall") {
     //ensure no unnecessary zip repacks on clean install of something
     //even if some files are present in several provided locations / are duplicates
-    TestCreator tc;
-    auto params = tc.GenInZipParams();
-    std::vector<std::vector<uint8_t>> fileContents;
-    for (int i = 0; i < 100; i++) {
-        fileContents.push_back(tc.GenFileContents());
-        fileContents.back().push_back((uint8_t)i);
-    }
-    DirState state;
-    for (int z = 0; z < 3; z++) {
-        InZipState &zf = state["arch" + std::to_string(z) + ".zip"];
+    for (int canRename = 0; canRename < 2; canRename++) {
+        TestCreator tc;
+        auto params = tc.GenInZipParams();
+        std::vector<std::vector<uint8_t>> fileContents;
         for (int i = 0; i < 100; i++) {
-            zf.emplace_back("file" + std::to_string(z) + ".zip", InZipFile{params, fileContents[i]});
-            //some duplicate files
-            if (i % 11 == 10)
-                zf.emplace_back("11added" + std::to_string(z) + ".zip", InZipFile{params, fileContents[i-z-5]});
-            if (i % 9 == 7)
-                zf.emplace_back("9added" + std::to_string(z) + ".zip", InZipFile{params, fileContents[i-2*z-5]});
+            fileContents.push_back(tc.GenFileContents());
+            fileContents.back().push_back((uint8_t)i);
         }
+        DirState state;
+        for (int z = 0; z < 3; z++) {
+            InZipState &zf = state["arch" + std::to_string(z) + ".zip"];
+            for (int i = 0; i < 100; i++) {
+                zf.emplace_back("file" + std::to_string(i) + ".tmp", InZipFile{params, fileContents[i]});
+                //some duplicate files
+                if (i % 11 == 10)
+                    zf.emplace_back("11added" + std::to_string(i) + ".tmp", InZipFile{params, fileContents[i-z-5]});
+                if (i % 9 == 7)
+                    zf.emplace_back("9added" + std::to_string(i) + ".tmp", InZipFile{params, fileContents[i-2*z-5]});
+            }
+        }
+
+        std::vector<DirState> prov(2);
+        if (canRename)
+            prov[0] = prov[1] = state;
+        else
+            tc.SplitState(state, prov);
+
+        Manifest targetMani;
+        stdext::remove_all(GetTempDir());
+        TestCreator::WriteState((GetTempDir() / "ci_current").string(), "", state, &targetMani);
+        Manifest providedMani;
+        TestCreator::WriteState((GetTempDir() / "ci_srcA").string(), "", prov[0], &providedMani);
+        TestCreator::WriteState((GetTempDir() / "ci_srcB").string(), "", prov[1], &providedMani);
+        stdext::remove_all(GetTempDir() / "ci_current");
+        stdext::create_directories(GetTempDir() / "ci_current");
+
+        UpdateProcess updater;
+        updater.Init(targetMani, providedMani, (GetTempDir() / "ci_current").string());
+        bool ok = updater.DevelopPlan(UpdateType::SameContents);
+        REQUIRE(ok);
+        g_testLogger->clear();
+        updater.RepackZips();
+        CHECK(g_testLogger->counts[lcRenameZipWithoutRepack] == (canRename ? 3 : 0));
+        CHECK(g_testLogger->counts[lcRepackZip] == (canRename ? 0 : 3));
     }
-
-    Manifest targetMani;
-    TestCreator::WriteState((GetTempDir() / "ci_current").string(), "", state, &targetMani);
-    Manifest providedMani;
-    TestCreator::WriteState((GetTempDir() / "ci_srcA").string(), "", state, &providedMani);
-    TestCreator::WriteState((GetTempDir() / "ci_srcB").string(), "", state, &providedMani);
-    stdext::remove_all(GetTempDir() / "ci_current");
-
-    UpdateProcess updater;
-    updater.Init(targetMani, providedMani, (GetTempDir() / "ci_current").string());
-    bool ok = updater.DevelopPlan(UpdateType::SameContents);
-    REQUIRE(ok);
-    updater.RepackZips();
-
-
 }
 
 
@@ -910,4 +931,12 @@ TEST_CASE("FuzzRemoteInfinite"
     * doctest::skip()
 ) {
     Fuzz((GetTempDir()).string(), -1, true);
+}
+
+//=============================================================
+
+int main(int argc, char** argv) {
+    doctest::Context ctx(argc, argv);
+    g_logger = g_testLogger;
+    return ctx.run();
 }
