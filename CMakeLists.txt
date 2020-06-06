@@ -42,6 +42,8 @@ set(sources
 )
 
 set(tests_sources
+    TestCreator.cpp
+    TestCreator.h
     Fuzzer.cpp
     Fuzzer.h
     TestsMain.cpp
