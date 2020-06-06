@@ -80,7 +80,13 @@ bool UpdateProcess::DevelopPlan(UpdateType type) {
             for (const FileMetainfo *pf : candidates) {
                 if (_updateType == UpdateType::SameCompressed && !(pf->compressedHash == tf.compressedHash))
                     continue;
-                int score = int(pf->location);
+                int score = int(pf->location) * 10 + 9;
+                //more priority to same-file/same-range matches
+                //this allows to avoid repacks on clean install
+                if (pf->byterange[0] == tf.byterange[0])
+                    score -= 2;
+                if (pf->filename == tf.filename && pf->zipPath.rel == tf.zipPath.rel)
+                    score -= 1;
                 if (score < bestScore) {
                     bestScore = score;
                     bestFile = pf;
