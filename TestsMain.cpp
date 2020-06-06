@@ -882,7 +882,7 @@ TEST_CASE("CleanInstall") {
                 if (i % 11 == 10)
                     zf.emplace_back("11added" + std::to_string(i) + ".tmp", InZipFile{params, fileContents[i-z-5]});
                 if (i % 9 == 7)
-                    zf.emplace_back("9added" + std::to_string(i) + ".tmp", InZipFile{params, fileContents[i-2*z-5]});
+                    zf.emplace_back("9added" + std::to_string(i) + ".tmp", InZipFile{params, fileContents[i-2*z-2]});
             }
         }
 
@@ -892,12 +892,19 @@ TEST_CASE("CleanInstall") {
         else
             tc.SplitState(state, prov);
 
+        HttpServer servers[2];
+        servers[0].SetRootDir((GetTempDir() / "ci_srcA").string());
+        servers[1].SetRootDir((GetTempDir() / "ci_srcB").string());
+        servers[0].SetPortNumber(8123);
+        servers[0].Start();
+        servers[1].Start();
+
         Manifest targetMani;
         stdext::remove_all(GetTempDir());
         TestCreator::WriteState((GetTempDir() / "ci_current").string(), "", state, &targetMani);
         Manifest providedMani;
-        TestCreator::WriteState((GetTempDir() / "ci_srcA").string(), "", prov[0], &providedMani);
-        TestCreator::WriteState((GetTempDir() / "ci_srcB").string(), "", prov[1], &providedMani);
+        TestCreator::WriteState((GetTempDir() / "ci_srcA").string(), servers[0].GetRootUrl(), prov[0], &providedMani);
+        TestCreator::WriteState((GetTempDir() / "ci_srcB").string(), servers[1].GetRootUrl(), prov[1], &providedMani);
         stdext::remove_all(GetTempDir() / "ci_current");
         stdext::create_directories(GetTempDir() / "ci_current");
 
@@ -906,6 +913,7 @@ TEST_CASE("CleanInstall") {
         bool ok = updater.DevelopPlan(UpdateType::SameContents);
         REQUIRE(ok);
         g_testLogger->clear();
+        updater.DownloadRemoteFiles();
         updater.RepackZips();
         CHECK(g_testLogger->counts[lcRenameZipWithoutRepack] == (canRename ? 3 : 0));
         CHECK(g_testLogger->counts[lcRepackZip] == (canRename ? 0 : 3));
