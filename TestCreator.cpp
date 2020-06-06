@@ -454,7 +454,10 @@ bool TestCreator::CheckForCaseAliasing(const DirState &state1, const DirState &s
     return false;
 }
 
-void TestCreator::WriteState(const std::string &localRoot, const std::string &remoteRoot, const DirState &state, Manifest *mani) {
+void TestCreator::WriteState(const std::string &localRoot, const std::string &rr, const DirState &state, Manifest *mani) {
+    std::string remoteRoot = rr;
+    if (remoteRoot.empty())
+        remoteRoot = localRoot;
     Manifest addedMani;
     for (const auto &zipPair : state) {
         PathAR zipPath = PathAR::FromRel(zipPair.first, localRoot);

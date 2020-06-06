@@ -1,5 +1,5 @@
 #include "Utils.h"
-#include "ZSAssert.h"
+#include "Logging.h"
 
 
 namespace ZipSync {

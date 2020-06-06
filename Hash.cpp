@@ -1,7 +1,7 @@
 #include "Hash.h"
 #include <stdio.h>
 #include <string.h>
-#include "ZSAssert.h"
+#include "Logging.h"
 
 
 namespace ZipSync {

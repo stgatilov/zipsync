@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <map>
 #include <set>
-#include "ZSAssert.h"
+#include "Logging.h"
 #include "Utils.h"
 #include "ZipUtils.h"
 #include "Downloader.h"

@@ -2,7 +2,7 @@
 
 #include <memory>
 #include <vector>
-#include "ZSAssert.h"
+#include "Logging.h"
 
 #include <unzip.h>
 #include <zip.h>
@@ -41,7 +41,7 @@ public:
  * ZipSync exception thrown when minizip function reports error.
  * Automatically throw by SAFE_CALL macro.
  */
-class MinizipError : public BaseError {
+class MinizipError : public ErrorException {
 public:
     MinizipError(int errcode);
     ~MinizipError();

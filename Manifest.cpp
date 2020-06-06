@@ -1,5 +1,5 @@
 #include "Manifest.h"
-#include "ZSAssert.h"
+#include "Logging.h"
 #include "StdString.h"
 #include "Utils.h"
 #include "ZipUtils.h"

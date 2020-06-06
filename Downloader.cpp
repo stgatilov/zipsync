@@ -1,7 +1,7 @@
 #include "Downloader.h"
 #include <curl/curl.h>
 #include <algorithm>
-#include "ZSAssert.h"
+#include "Logging.h"
 #include "StdString.h"
 #undef min
 #undef max

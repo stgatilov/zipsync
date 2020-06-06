@@ -38,7 +38,7 @@ ZipFileHolder::ZipFileHolder(const char *path)
 }
 
 MinizipError::MinizipError(int errcode)
-    : BaseError("Minizip error " + std::to_string(errcode))
+    : ErrorException(("Minizip error " + std::to_string(errcode)).c_str(), lcMinizipError)
 {}
 MinizipError::~MinizipError()
 {}

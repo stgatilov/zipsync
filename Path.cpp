@@ -1,5 +1,5 @@
 #include "Path.h"
-#include "ZSAssert.h"
+#include "Logging.h"
 #include "StdString.h"
 
 #ifdef _WIN32

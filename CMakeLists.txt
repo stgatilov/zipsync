@@ -11,8 +11,8 @@ set(sources
     minizip_extra.h
     minizip_private.h
 
-    ZSAssert.h
-    ZSAssert.cpp
+    Logging.h
+    Logging.cpp
 
     StdFilesystem.cpp
     StdFilesystem.h

@@ -60,7 +60,7 @@ public:
     static bool ArePathsCaseAliased(std::string pathA, std::string pathB);
     bool CheckForCaseAliasing(const DirState &state1, const DirState &state2);
 
-    void WriteState(const std::string &localRoot, const std::string &remoteRoot, const DirState &state, Manifest *mani);
+    static void WriteState(const std::string &localRoot, const std::string &remoteRoot, const DirState &state, Manifest *mani);
 };
 
 }
