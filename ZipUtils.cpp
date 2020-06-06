@@ -192,11 +192,13 @@ struct ZipEndOfCentral {
     uint16_t commentLen;
 };
 #pragma pack(pop)
-void minizipAddCentralDirectory(const char *zipFilename) {
+void minizipAddCentralDirectory(const char *zipFilename, std::vector<FileAttribInfo> attribs) {
+    std::sort(attribs.begin(), attribs.end(), [](const FileAttribInfo &a, const FileAttribInfo &b) { return a.offset < b.offset; });
     StdioFileHolder f(zipFilename, "r+b");
     std::vector<ZipCentralHeader> headers;
     std::vector<std::string> filenames;
     ZipLocalHeader lh;
+    int attrIdx = 0;
     while (fread(&lh, sizeof(lh), 1, f) == 1) {
         uint32_t offset = ftell(f) - sizeof(lh);
         ZipSyncAssert(lh.magic == 0x04034b50);
@@ -207,6 +209,12 @@ void minizipAddCentralDirectory(const char *zipFilename) {
         ch.magic = 0x02014b50;
         memcpy(&ch.versionNeeded, &lh.versionNeeded, sizeof(ZipLocalHeader) - offsetof(ZipLocalHeader, versionNeeded));
         ch.offset = offset;
+        while (attrIdx < attribs.size() && attribs[attrIdx].offset < offset)
+            attrIdx++;
+        if (attrIdx < attribs.size() && attribs[attrIdx].offset == offset) {
+            ch.externalAttr = attribs[attrIdx].externalAttribs;
+            ch.internalAttr = attribs[attrIdx].internalAttribs;
+        }
         headers.push_back(ch);
         filenames.push_back(std::string(filename.get(), filename.get() + lh.filenameLen));
         ZipSyncAssert(fseek(f, lh.compSize, SEEK_CUR) == 0);

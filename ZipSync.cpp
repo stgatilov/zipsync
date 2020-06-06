@@ -641,10 +641,16 @@ void UpdateProcess::DownloadRemoteFiles() {
     downloader.DownloadAll();
 
     for (const auto &pKV : urlStates) {
-        const std::string  &url = pKV.first;
+        const std::string &url = pKV.first;
         const UrlData &state = pKV.second;
 
-        minizipAddCentralDirectory(state.path.abs.c_str());
+        std::vector<FileAttribInfo> fileAttribs;
+        for (const auto &pOI : state.baseToProvIdx) {
+            ManifestIter provided(_providedMani, pOI.second);
+            fileAttribs.push_back(FileAttribInfo{pOI.first, provided->props.externalAttribs, provided->props.internalAttribs});
+        }
+
+        minizipAddCentralDirectory(state.path.abs.c_str(), fileAttribs);
         UnzFileIndexed zf;
         zf.reset(unzOpen(state.path.abs.c_str()));
 

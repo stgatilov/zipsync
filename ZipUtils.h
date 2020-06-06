@@ -74,8 +74,13 @@ bool unzLocateFileAtBytes(unzFile zf, const char *filename, uint32_t from, uint3
 
 void minizipCopyFile(unzFile zf, zipFile zfOut, const char *filename, int method, int flags, uint16_t internalAttribs, uint32_t externalAttribs, uint32_t dosDate, bool copyRaw, uint32_t crc, uint32_t contentsSize);
 
+struct FileAttribInfo {
+    uint32_t offset;
+    uint32_t externalAttribs;
+    uint16_t internalAttribs;
+};
 //given a tightly packed zip file without central directory, rebuilds it and appends it to the end of file
-void minizipAddCentralDirectory(const char *filename);
+void minizipAddCentralDirectory(const char *filename, std::vector<FileAttribInfo> attribs = {});
 
 //repack given zip file so that it gets accepted by ZipSync
 void minizipNormalize(const char *srcFilename, const char *dstFilename = NULL);
