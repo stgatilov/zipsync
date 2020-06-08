@@ -3,6 +3,7 @@
 #include "StdString.h"
 #include "Logging.h"
 #include "ZipUtils.h"
+#include "Hash.h"
 
 
 namespace ZipSync {
@@ -23,9 +24,13 @@ void WriteIniFile(const char *path, const IniData &data, IniMode mode) {
     if (mode == IniMode::Auto)
         mode = (path[strlen(path)-1] == 'z' ? IniMode::Zipped : IniMode::Plain);
     if (mode == IniMode::Zipped) {
+        std::string hash = "zsMH:" + Hasher().Update(text.data(), text.size()).Finalize().Hex();
         ZipFileHolder zf(path);
         zip_fileinfo info = {0};
         info.dosDate = 0x28210000;  //1 January 2000 --- set it just to make date valid
+        SAFE_CALL(zipOpenNewFileInZip(zf, "hash.txt", &info, NULL, 0, NULL, 0, NULL, Z_NO_COMPRESSION, Z_NO_COMPRESSION));
+        SAFE_CALL(zipWriteInFileInZip(zf, hash.data(), hash.size()));
+        SAFE_CALL(zipCloseFileInZip(zf));
         SAFE_CALL(zipOpenNewFileInZip(zf, "data.ini", &info, NULL, 0, NULL, 0, NULL, Z_DEFLATED, Z_BEST_COMPRESSION));
         SAFE_CALL(zipWriteInFileInZip(zf, text.data(), text.size()));
         SAFE_CALL(zipCloseFileInZip(zf));
