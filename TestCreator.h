@@ -14,7 +14,7 @@ struct InZipParams {
     int method;
     int level;
     uint32_t dosDate;
-    uint16_t internalAttribs;
+    uint16_t internalAttribs;   //warning: minizip usually changes this value when writing zip!
     uint32_t externalAttribs;
     bool operator==(const InZipParams &b) const;
 };
