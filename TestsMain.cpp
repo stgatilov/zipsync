@@ -917,6 +917,16 @@ TEST_CASE("CleanInstall") {
         updater.RepackZips();
         CHECK(g_testLogger->counts[lcRenameZipWithoutRepack] == (canRename ? 3 : 0));
         CHECK(g_testLogger->counts[lcRepackZip] == (canRename ? 0 : 3));
+
+        Manifest resMani = updater.GetProvidedManifest().Filter([](const FileMetainfo &f) {
+            return f.location == FileLocation::Inplace;
+        });
+        for (int i = 0; i < resMani.size(); i++) {
+            CHECK(resMani[i].props.externalAttribs == params.externalAttribs);
+            CHECK(resMani[i].props.internalAttribs == params.internalAttribs);
+            CHECK(resMani[i].props.lastModTime == params.dosDate);
+            CHECK(resMani[i].props.compressionMethod == params.method);
+        }
     }
 }
 
