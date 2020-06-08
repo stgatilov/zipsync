@@ -63,11 +63,6 @@ class Fuzzer : private TestCreator {
                     if (pProp.first == "package")
                         pProp.second = "(removed)";
                 }
-                if (pSect.first.find("__download") != std::string::npos) {
-                    for (auto &pProp : pSect.second)
-                        if (pProp.first == "internalAttribs" || pProp.first == "externalAttribs")
-                            pProp.second = "(removed)";
-                }
             }
         };
         ClearCompressedHash(iniDataA);
