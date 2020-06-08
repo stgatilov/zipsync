@@ -51,10 +51,6 @@ set(tests_sources
     HttpServer.h
 )
 
-set(playground_sources
-    PlaygroundMain.cpp
-)
-
 set(zipsynccmd_sources
     Wildcards.h
     Wildcards.cpp
@@ -75,9 +71,6 @@ target_link_libraries(libzipsync PUBLIC CONAN_PKG::zlib CONAN_PKG::BLAKE2 CONAN_
 
 add_executable(tests ${tests_sources})
 target_link_libraries(tests PRIVATE libzipsync CONAN_PKG::doctest CONAN_PKG::libmicrohttpd)
-
-add_executable(playground ${playground_sources})
-target_link_libraries(playground libzipsync)
 
 add_executable(zipsync ${zipsynccmd_sources})
 target_link_libraries(zipsync libzipsync CONAN_PKG::args)
