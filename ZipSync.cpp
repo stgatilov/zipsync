@@ -701,6 +701,12 @@ void UpdateProcess::DownloadRemoteFiles() {
             for (int midx : matchIds)
                 _matches[midx].provided = ManifestIter(_providedMani, pi);
         }
+
+        //mark downloaded file as "managed", meaning that repacking can remove it if it likes
+        //this also enables fast path: rename the zip without any repacking
+        //note that we have to ensure that zip file is perfectly good in its current state!
+        //otherwise user will get bad zip, and no repacking would happen to fix it...
+        AddManagedZip(state.path.abs);
     }
 
 }
