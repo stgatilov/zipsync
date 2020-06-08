@@ -10,15 +10,10 @@ set(sources
     minizip_extra.c
     minizip_extra.h
     minizip_private.h
-
-    Logging.h
-    Logging.cpp
-
-    StdFilesystem.cpp
-    StdFilesystem.h
     StdString.cpp
     StdString.h
-
+    Logging.h
+    Logging.cpp
     Ini.h
     Ini.cpp
     Hash.h
@@ -37,11 +32,12 @@ set(sources
     ZipSync.cpp
     Downloader.h
     Downloader.cpp
-
     ZipSync.natvis
 )
 
 set(tests_sources
+    StdFilesystem.cpp
+    StdFilesystem.h
     TestCreator.cpp
     TestCreator.h
     Fuzzer.cpp
@@ -52,6 +48,8 @@ set(tests_sources
 )
 
 set(zipsynccmd_sources
+    StdFilesystem.cpp
+    StdFilesystem.h
     Wildcards.h
     Wildcards.cpp
     CommandLine.cpp
