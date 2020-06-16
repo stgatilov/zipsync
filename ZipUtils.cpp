@@ -253,7 +253,8 @@ void minizipNormalize(const char *srcFilename, const char *dstFilename) {
     };
     std::vector<FileLocation> files;
 
-    UnzFileHolder zfIn(srcFilename);
+    UnzFileIndexed zfIn;
+    zfIn.Open(srcFilename);
     SAFE_CALL(unzGoToFirstFile(zfIn));
     while (1) {
         char filename[SIZE_PATH];
@@ -280,8 +281,7 @@ void minizipNormalize(const char *srcFilename, const char *dstFilename) {
         RemoveFile(tempFilename);
     ZipFileHolder zfOut(tempFilename.c_str());
     for (const FileLocation &f : files) {
-        bool found = unzLocateFileAtBytes(zfIn, f.filename.c_str(), f.range[0], f.range[1]);
-        ZipSyncAssert(found);
+        zfIn.LocateByByterange(f.range[0], f.range[1]);
 
         unz_file_info infoIn;
         SAFE_CALL(unzGetCurrentFileInfo(zfIn, &infoIn, NULL, 0, NULL, 0, NULL, 0));
@@ -308,7 +308,7 @@ void minizipNormalize(const char *srcFilename, const char *dstFilename) {
         SAFE_CALL(zipCloseFileInZipRaw(zfOut, infoIn.uncompressed_size, infoIn.crc));
         SAFE_CALL(unzCloseCurrentFile(zfIn));
     }
-    zfIn.reset();
+    zfIn.Clear();
     zfOut.reset();
 
     if (IfFileExists(dstFilename))
