@@ -296,15 +296,9 @@ void minizipNormalize(const char *srcFilename, const char *dstFilename) {
         infoOut.external_fa = infoIn.external_fa & 0xFF;    //drop anything except for lower byte (which has MS-DOS attribs)
         int level = CompressionLevelFromGpFlags(infoIn.flag);
         SAFE_CALL(zipOpenNewFileInZip2(zfOut, f.filename.c_str(), &infoOut, NULL, 0, NULL, 0, NULL, infoIn.compression_method, level, true));
-        while (1) {
-            char buffer[SIZE_FILEBUFFER];
-            int bytes = unzReadCurrentFile(zfIn, buffer, sizeof(buffer));
-            if (bytes < 0)
-                SAFE_CALL(bytes);
-            if (bytes == 0)
-                break;
-            SAFE_CALL(zipWriteInFileInZip(zfOut, buffer, bytes));
-        }
+        char buffer[SIZE_FILEBUFFER];
+        //faster than minizip copy: no CRC32 calculation, large buffer
+        minizipCopyDataRaw(zfIn, zfOut, buffer, sizeof(buffer));
         SAFE_CALL(zipCloseFileInZipRaw(zfOut, infoIn.uncompressed_size, infoIn.crc));
         SAFE_CALL(unzCloseCurrentFile(zfIn));
     }
