@@ -58,9 +58,9 @@ bool UnzFileIndexed::Entry::operator< (const UnzFileIndexed::Entry &b) const {
     return byterangeStart < b.byterangeStart;
 }
 UnzFileIndexed::~UnzFileIndexed() {}
-UnzFileIndexed::UnzFileIndexed() : UnzFileUniquePtr(0, unzClose) {}
+UnzFileIndexed::UnzFileIndexed() : zfHandle(0, unzClose) {}
 void UnzFileIndexed::reset(unzFile zf) {
-    UnzFileUniquePtr::reset(zf);
+    zfHandle.reset(zf);
     sortedEntries.clear();
     if (!zf)
         return;
@@ -87,7 +87,7 @@ void UnzFileIndexed::LocateByByterange(uint32_t start, uint32_t end) {
     aux.byterangeStart = start;
     int idx = std::lower_bound(sortedEntries.begin(), sortedEntries.end(), aux) - sortedEntries.begin();
     ZipSyncAssertF(idx < sortedEntries.size() && sortedEntries[idx].byterangeStart == start, "Failed to find file by byterange");
-    SAFE_CALL(unzGoToFilePos(get(), &sortedEntries[idx].unzPos));
+    SAFE_CALL(unzGoToFilePos(zfHandle.get(), &sortedEntries[idx].unzPos));
 }
 
 
@@ -260,7 +260,7 @@ void minizipNormalize(const char *srcFilename, const char *dstFilename) {
         floc.filename = filename;
         int len = strlen(filename);
         bool isDirectory = info.uncompressed_size == 0 && info.compression_method == 0 && ((info.external_fa & 16) || (len > 0 && filename[len-1] == '/'));
-        if (!isDirectory) 
+        if (!isDirectory)
             files.push_back(floc);
 
         int err = unzGoToNextFile(zfIn);

@@ -51,18 +51,19 @@ public:
 //note: file must be NOT opened
 void unzGetCurrentFilePosition(unzFile zf, uint32_t *localHeaderStart, uint32_t *fileDataStart, uint32_t *fileDataEnd);
 
-class UnzFileIndexed : public UnzFileUniquePtr {
+class UnzFileIndexed {
     struct Entry {
         uint32_t byterangeStart;
         unz_file_pos unzPos;
         bool operator< (const Entry &b) const;
     };
+    UnzFileUniquePtr zfHandle;
     std::vector<Entry> sortedEntries;
 public:
     ~UnzFileIndexed();
     UnzFileIndexed();
     UnzFileIndexed(UnzFileIndexed &&) = default;
-    operator unzFile() const { return get(); }
+    operator unzFile() const { return zfHandle.get(); }
     void reset(unzFile zf = NULL);
     void LocateByByterange(uint32_t start, uint32_t end);
 };
