@@ -58,12 +58,17 @@ bool UnzFileIndexed::Entry::operator< (const UnzFileIndexed::Entry &b) const {
     return byterangeStart < b.byterangeStart;
 }
 UnzFileIndexed::~UnzFileIndexed() {}
-UnzFileIndexed::UnzFileIndexed() : zfHandle(0, unzClose) {}
-void UnzFileIndexed::reset(unzFile zf) {
-    zfHandle.reset(zf);
-    sortedEntries.clear();
+UnzFileIndexed::UnzFileIndexed() : _zfHandle(0, unzClose) {}
+void UnzFileIndexed::Clear() {
+    _zfHandle.reset();
+    _sortedEntries.clear();
+}
+void UnzFileIndexed::Open(const char *path) {
+    unzFile zf = unzOpen(path);
     if (!zf)
-        return;
+        g_logger->errorf(lcCantOpenFile, "Failed to open zip file \"%s\"", path);
+    _zfHandle.reset(zf);
+    _sortedEntries.clear();
     SAFE_CALL(unzGoToFirstFile(zf));
     while (1) {
         char currFilename[SIZE_PATH];
@@ -73,21 +78,21 @@ void UnzFileIndexed::reset(unzFile zf) {
         Entry e;
         e.byterangeStart = from;
         SAFE_CALL(unzGetFilePos(zf, &e.unzPos));
-        sortedEntries.push_back(e);
+        _sortedEntries.push_back(e);
         int res = unzGoToNextFile(zf);
         if (res == UNZ_END_OF_LIST_OF_FILE)
             break;   //finished
         SAFE_CALL(res);
     }
-    if (!std::is_sorted(sortedEntries.begin(), sortedEntries.end()))
-        std::sort(sortedEntries.begin(), sortedEntries.end());
+    if (!std::is_sorted(_sortedEntries.begin(), _sortedEntries.end()))
+        std::sort(_sortedEntries.begin(), _sortedEntries.end());
 }
 void UnzFileIndexed::LocateByByterange(uint32_t start, uint32_t end) {
     Entry aux;
     aux.byterangeStart = start;
-    int idx = std::lower_bound(sortedEntries.begin(), sortedEntries.end(), aux) - sortedEntries.begin();
-    ZipSyncAssertF(idx < sortedEntries.size() && sortedEntries[idx].byterangeStart == start, "Failed to find file by byterange");
-    SAFE_CALL(unzGoToFilePos(zfHandle.get(), &sortedEntries[idx].unzPos));
+    int idx = std::lower_bound(_sortedEntries.begin(), _sortedEntries.end(), aux) - _sortedEntries.begin();
+    ZipSyncAssertF(idx < _sortedEntries.size() && _sortedEntries[idx].byterangeStart == start, "Failed to find file by byterange");
+    SAFE_CALL(unzGoToFilePos(_zfHandle.get(), &_sortedEntries[idx].unzPos));
 }
 
 

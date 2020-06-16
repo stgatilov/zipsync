@@ -57,14 +57,15 @@ class UnzFileIndexed {
         unz_file_pos unzPos;
         bool operator< (const Entry &b) const;
     };
-    UnzFileUniquePtr zfHandle;
-    std::vector<Entry> sortedEntries;
+    UnzFileUniquePtr _zfHandle;
+    std::vector<Entry> _sortedEntries;
 public:
     ~UnzFileIndexed();
     UnzFileIndexed();
     UnzFileIndexed(UnzFileIndexed &&) = default;
-    operator unzFile() const { return zfHandle.get(); }
-    void reset(unzFile zf = NULL);
+    operator unzFile() const { return _zfHandle.get(); }
+    void Clear();
+    void Open(const char *path);
     void LocateByByterange(uint32_t start, uint32_t end);
 };
 

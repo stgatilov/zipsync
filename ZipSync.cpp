@@ -129,7 +129,7 @@ public:
 
         UnzFileIndexed &UnzFileCached() const {
             if (!zfCache)
-                zfCache.reset(unzOpen(_zipPath.c_str()));
+                zfCache.Open(_zipPath.c_str());
             return zfCache;
         }
         bool operator< (const ZipInfo &b) const {
@@ -409,7 +409,7 @@ public:
                 continue;       //already reduced
             if (zip._usedCnt > 0)
                 continue;       //original zip still needed as source
-            zip.zfCache.reset();
+            zip.zfCache.Clear();
 
             if (IfFileExists(zip._zipPath)) {
                 UnzFileHolder zf(zip._zipPath.c_str());
@@ -569,7 +569,7 @@ public:
             ReduceOldZips();
         }
         for (ZipInfo &zip : _zips)
-            zip.zfCache.reset();
+            zip.zfCache.Clear();
 
         RenameRepackedZips();
         RewriteProvidedManifest();
@@ -658,7 +658,7 @@ void UpdateProcess::DownloadRemoteFiles() {
 
         minizipAddCentralDirectory(state.path.abs.c_str(), fileAttribs);
         UnzFileIndexed zf;
-        zf.reset(unzOpen(state.path.abs.c_str()));
+        zf.Open(state.path.abs.c_str());
 
         for (const auto &pOI : state.baseToProvIdx) {
             uint32_t offset = pOI.first;
