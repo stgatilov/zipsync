@@ -932,11 +932,11 @@ TEST_CASE("CleanInstall") {
 
 
 TEST_CASE("FuzzLocal50") {
-    Fuzz((GetTempDir()).string(), 50, false);
+    Fuzz((GetTempDir() / "FL50").string(), 50, false);
 }
 
 TEST_CASE("FuzzRemote50") {
-    Fuzz((GetTempDir()).string(), 50, true);
+    Fuzz((GetTempDir() / "FR50").string(), 50, true);
 }
 
 TEST_CASE("FuzzLocalInfinite"
