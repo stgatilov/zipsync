@@ -306,19 +306,10 @@ void CommandAnalyze(args::Subparser &parser) {
     ZipSync::WriteIniFile(maniPath.c_str(), manifest.WriteToIni());
 }
 
-void CommandClean(args::Subparser &parser) {
-    args::ValueFlag<std::string> argRootDir(parser, "root", "the root directory to clean after repack\n", {'r', "root"});
-    args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"}, args::Options::HiddenFromDescription);
-    parser.Parse();
-
+void DoClean(std::string root) {
     static std::string PREFIXES[] = {"__reduced__", "__repacked__", "__download"};
 
-    std::string root = GetCwd();
-    if (argRootDir)
-        root = argRootDir.Get();
-    root = NormalizeSlashes(root);
     std::vector<std::string> allFiles = EnumerateFilesInDirectory(root);
-
     for (std::string filename : allFiles) {
         std::string fn = ZipSync::GetFilename(filename);
         bool match = false;
@@ -332,6 +323,17 @@ void CommandClean(args::Subparser &parser) {
             ZipSync::RemoveFile(fullPath);
         }
     }
+}
+void CommandClean(args::Subparser &parser) {
+    args::ValueFlag<std::string> argRootDir(parser, "root", "the root directory to clean after repack\n", {'r', "root"});
+    args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"}, args::Options::HiddenFromDescription);
+    parser.Parse();
+
+    std::string root = GetCwd();
+    if (argRootDir)
+        root = argRootDir.Get();
+    root = NormalizeSlashes(root);
+    DoClean(root);
 }
 
 void CommandDiff(args::Subparser &parser) {
@@ -414,6 +416,7 @@ void CommandUpdate(args::Subparser &parser) {
         "(all relative paths are based from the root directory)", {'r', "root"});
     args::ValueFlag<std::string> argTargetMani(parser, "trgMani", "Path to the target manifest to update to", {'t', "target"}, "manifest.iniz", args::Options::Required);
     args::ValueFlagList<std::string> argProvidedMani(parser, "provMani", "Path to additional provided manifests describing where to take files from", {'p', "provided"}, {});
+    args::Flag argClean(parser, "clean", "Run \"clean\" command before and after update", {'c', "clean"});
     args::PositionalList<std::string> argManagedZips(parser, "managed", "List of files or globs specifying which zips must be updated");
     args::HelpFlag help(parser, "help", "Display this help menu", {'h', "help"}, args::Options::HiddenFromDescription);
     parser.Parse();
@@ -423,9 +426,12 @@ void CommandUpdate(args::Subparser &parser) {
         root = argRootDir.Get();
     root = NormalizeSlashes(root);
     std::string targetManiPath = GetPath(argTargetMani.Get(), root);
+    CreateDirectories(root);
+    if (argClean.Get())
+        DoClean(root);
+
     std::vector<std::string> providManiPaths = CollectFilePaths(argProvidedMani.Get(), root);
     std::vector<std::string> managedZips = CollectFilePaths(argManagedZips.Get(), root);
-    CreateDirectories(root);
 
     ZipSync::Manifest targetManifest;
     ZipSync::Manifest providedManifest;
@@ -503,6 +509,9 @@ void CommandUpdate(args::Subparser &parser) {
     std::string resManiPath = GetPath("manifest.iniz", root);
     printf("Saving resulting manifest to %s\n", resManiPath.c_str());
     ZipSync::WriteIniFile(resManiPath.c_str(), provMani.WriteToIni());
+
+    if (argClean.Get())
+        DoClean(root);
 }
 
 int main(int argc, char **argv) {
