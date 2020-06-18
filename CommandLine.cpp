@@ -499,6 +499,21 @@ void CommandUpdate(args::Subparser &parser) {
     }
     printf("Update plan developed\n");
 
+    uint64_t bytesTotal = 0, bytesRemote = 0;
+    int numTotal = 0, numRemote = 0;
+    for (int i = 0; i < update.MatchCount(); i++) {
+        const auto &m = update.GetMatch(i);
+        uint32_t size = m.provided->byterange[1] - m.provided->byterange[0];
+        if (m.provided->location == ZipSync::FileLocation::RemoteHttp) {
+            numRemote++;
+            bytesRemote += size;
+        }
+        numTotal++;
+        bytesTotal += size;
+    }
+    printf("To be downloaded:\n");
+    printf("  %d/%d files of size %0.0lf/%0.0lf MB (%0.2lf%%)\n", numRemote, numTotal, 1e-6 * bytesRemote, 1e-6 * bytesTotal, 100.0 * bytesRemote/bytesTotal);
+
     printf("Downloading missing files...\n");
     update.DownloadRemoteFiles();
     printf("Repacking zips...\n");
