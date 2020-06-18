@@ -30,6 +30,9 @@ DownloadSource::DownloadSource(const std::string &url) : url(url) { byterange[0]
 DownloadSource::DownloadSource(const std::string &url, uint32_t from, uint32_t to) : url(url) { byterange[0] = from; byterange[1] = to; }
 
 
+Downloader::~Downloader() {}
+Downloader::Downloader() : _curlHandle(nullptr, curl_easy_cleanup) {}
+
 void Downloader::EnqueueDownload(const DownloadSource &source, const DownloadFinishedCallback &finishedCallback) {
     _downloads.push_back(Download{source, finishedCallback});
 }
@@ -40,6 +43,8 @@ void Downloader::SetProgressCallback(const GlobalProgressCallback &progressCallb
 void Downloader::DownloadAll() {
     if (_progressCallback)
         _progressCallback(0.0, "Downloading started");
+
+    _curlHandle.reset(curl_easy_init());
 
     for (int i = 0; i <  _downloads.size(); i++)
         _urlStates[_downloads[i].src.url].downloadsIds.push_back(i);
@@ -55,6 +60,9 @@ void Downloader::DownloadAll() {
         std::string url = pKV.first;
         DownloadAllForUrl(url);
     }
+
+    ZipSyncAssert(_curlHandle.get_deleter() == curl_easy_cleanup);
+    _curlHandle.reset();
 
     if (_progressCallback)
         _progressCallback(1.0, "Downloading finished");
@@ -152,24 +160,23 @@ void Downloader::DownloadOneRequest(const std::string &url, const std::vector<in
     _currResponse.reset(new CurlResponse());
     _currResponse->url = url;
     _currResponse->progressWeight = double(thisEstimate) / totalEstimate;
-    std::unique_ptr<CURL, void (*)(CURL*)> curl(curl_easy_init(), curl_easy_cleanup);
-    curl_easy_setopt(curl.get(), CURLOPT_URL, url.c_str());
-    curl_easy_setopt(curl.get(), CURLOPT_RANGE, byterangeStr.c_str());
-    curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, (curl_write_callback)write_callback);
-    curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, this);
-    curl_easy_setopt(curl.get(), CURLOPT_HEADERFUNCTION, (curl_write_callback)header_callback);
-    curl_easy_setopt(curl.get(), CURLOPT_HEADERDATA, this);
-    curl_easy_setopt(curl.get(), CURLOPT_XFERINFOFUNCTION, (curl_xferinfo_callback)xferinfo_callback);
-    curl_easy_setopt(curl.get(), CURLOPT_XFERINFODATA, this);
-    curl_easy_setopt(curl.get(), CURLOPT_NOPROGRESS, 0);
+    CURL *curl = _curlHandle.get();
+    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl, CURLOPT_RANGE, byterangeStr.c_str());
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, (curl_write_callback)write_callback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, this);
+    curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, (curl_write_callback)header_callback);
+    curl_easy_setopt(curl, CURLOPT_HEADERDATA, this);
+    curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, (curl_xferinfo_callback)xferinfo_callback);
+    curl_easy_setopt(curl, CURLOPT_XFERINFODATA, this);
+    curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0);
     UpdateProgress();
-    CURLcode ret = curl_easy_perform(curl.get());
+    CURLcode ret = curl_easy_perform(curl);
     long httpRes = 0;
-    curl_easy_getinfo(curl.get(), CURLINFO_HTTP_CODE, &httpRes);
-    curl.reset();
-    ZipSyncAssertF(httpRes == 200 || httpRes == 206, "Unexpected HTTP response %d for URL %s", httpRes, url.c_str());
+    curl_easy_getinfo(curl, CURLINFO_HTTP_CODE, &httpRes);
     ZipSyncAssertF(ret != CURLE_WRITE_ERROR, "Response without byteranges for URL %s", url.c_str());
     ZipSyncAssertF(ret == CURLE_OK, "Unexpected CURL error %d on URL %s", ret, url.c_str());
+    ZipSyncAssertF(httpRes == 200 || httpRes == 206, "Unexpected HTTP return code %d for URL %s", httpRes, url.c_str());
     _currResponse->progressRatio = 1.0;
     UpdateProgress();
 

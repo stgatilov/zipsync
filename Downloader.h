@@ -60,7 +60,13 @@ class Downloader {
     double _totalProgress = 0.0;            //which portion of DownloadAll is complete (without current request)
     int64_t _totalBytesDownloaded = 0;      //how many bytes downloaded in total (without current request)
 
+    //reuse CURL handle for requests in order to exploit connection pool
+    std::unique_ptr<CURL, void (*)(CURL*)> _curlHandle;
+
 public:
+    ~Downloader();
+    Downloader();
+
     void EnqueueDownload(const DownloadSource &source, const DownloadFinishedCallback &finishedCallback);
     void SetProgressCallback(const GlobalProgressCallback &progressCallback);
     void DownloadAll();
