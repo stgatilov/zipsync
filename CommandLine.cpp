@@ -544,7 +544,13 @@ void CommandUpdate(args::Subparser &parser) {
     printf("  %d/%d files of size %0.0lf/%0.0lf MB (%0.2lf%%)\n", numRemote, numTotal, 1e-6 * bytesRemote, 1e-6 * bytesTotal, 100.0 * bytesRemote/bytesTotal);
 
     printf("Downloading missing files...\n");
-    update.DownloadRemoteFiles();
+    {
+        ProgressIndicator progress;
+        update.DownloadRemoteFiles([&progress](double ratio, const char *comment) {
+            progress.Update(ratio, comment);
+        });
+        progress.Update(1.0, "All downloads complete");
+    }
     printf("Repacking zips...\n");
     update.RepackZips();
     ZipSync::Manifest provMani = update.GetProvidedManifest();

@@ -2,11 +2,14 @@
 
 #include "Manifest.h"
 #include <set>
+#include <functional>
 
 
 namespace ZipSync {
 
 class LocalCache;
+
+typedef std::function<void(double, const char*)> GlobalProgressCallback;
 
 enum class UpdateType {
     SameContents,       //uncompressed contents of every file must match (and compression settings too)
@@ -49,17 +52,21 @@ private:
 public:
     //must be called prior to any usage of an instance
     void Init(const Manifest &targetMani, const Manifest &providedMani, const std::string &rootDir);
+
+    //mark this zip as being owned by updater
+    //it means that updater must delete it if it's not mentioned on target manifest
     void AddManagedZip(const std::string &zipPath, bool relative = false);
 
     //decide how to execute the update (which files to find where)
     bool DevelopPlan(UpdateType type);
 
-    void DownloadRemoteFiles();
+    //download all remote files which are necessary for update
+    void DownloadRemoteFiles(const GlobalProgressCallback &progressCallback = GlobalProgressCallback());
 
     //having all matches available locally, perform the update
-    //TODO: pass progress callback
     void RepackZips();
 
+    //TODO: local cache for reduced zips?
     void RemoveOldZips(const LocalCache *cache);
 
 

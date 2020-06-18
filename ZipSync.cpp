@@ -581,7 +581,7 @@ void UpdateProcess::RepackZips() {
     impl.DoAll();
 }
 
-void UpdateProcess::DownloadRemoteFiles() {
+void UpdateProcess::DownloadRemoteFiles(const GlobalProgressCallback &progressCallback) {
     struct UrlData {
         PathAR path;
         StdioFileHolder file;
@@ -641,8 +641,9 @@ void UpdateProcess::DownloadRemoteFiles() {
         });
     }
 
-    downloader.SetProgressCallback([this](double ratio, const char *message) {
-        //TODO
+    downloader.SetProgressCallback([this,&progressCallback](double ratio, const char *message) {
+        if (progressCallback)
+            progressCallback(ratio, message);
     });
     downloader.DownloadAll();
 
