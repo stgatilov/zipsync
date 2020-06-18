@@ -91,7 +91,7 @@ void UnzFileIndexed::LocateByByterange(uint32_t start, uint32_t end) {
     Entry aux;
     aux.byterangeStart = start;
     int idx = std::lower_bound(_sortedEntries.begin(), _sortedEntries.end(), aux) - _sortedEntries.begin();
-    ZipSyncAssertF(idx < _sortedEntries.size() && _sortedEntries[idx].byterangeStart == start, "Failed to find file by byterange");
+    ZipSyncAssertF(idx < _sortedEntries.size() && _sortedEntries[idx].byterangeStart == start, "Failed to find file at byterange [%u..%u]", start, end);
     SAFE_CALL(unzGoToFilePos(_zfHandle.get(), &_sortedEntries[idx].unzPos));
 }
 
