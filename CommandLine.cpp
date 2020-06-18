@@ -43,6 +43,9 @@ std::string NormalizeSlashes(std::string path) {
         path.pop_back();
     return path;
 }
+bool StartsWith(const std::string &text, const std::string &prefix) {
+    return text.size() > prefix.size() && text.substr(0, prefix.size()) == prefix;
+}
 
 std::string GetPath(std::string path, const std::string &root) {
     using ZipSync::PathAR;
@@ -220,21 +223,37 @@ int TotalCount(const ZipSync::Manifest &mani, bool providedOnly = true) {
 }
 
 void DoClean(std::string root) {
-    static std::string PREFIXES[] = {"__reduced__", "__repacked__", "__download"};
+    static std::string DELETE_PREFIXES[] = {"__reduced__", "__download", "__repacked__"};
+    static std::string RESTORE_PREFIXES[] = {"__repacked__"};
 
     std::vector<std::string> allFiles = EnumerateFilesInDirectory(root);
     for (std::string filename : allFiles) {
         std::string fn = ZipSync::GetFilename(filename);
-        bool match = false;
-        for (const std::string &p : PREFIXES) {
-            if (fn.size() > p.size() && fn.substr(0, p.size()) == p)
-                match = true;
+
+        bool shouldDelete = false;
+        for (const std::string &p : DELETE_PREFIXES)
+            if (StartsWith(fn, p))
+                shouldDelete = true;
+        if (!shouldDelete)
+            continue;
+
+        std::string shouldRestore;
+        for (const std::string &p : RESTORE_PREFIXES)
+            if (StartsWith(fn, p))
+                shouldRestore = fn.substr(p.size());
+        if (!shouldRestore.empty()) {
+            std::string fullOldPath = root + '/' + filename;
+            std::string fullNewPath = root + '/' + shouldRestore;
+            if (!ZipSync::IfFileExists(fullNewPath)) {
+                printf("Restoring %s...\n", fullNewPath.c_str());
+                ZipSync::RenameFile(fullOldPath, fullNewPath);
+                continue;
+            }
         }
-        if (match) {
-            std::string fullPath = root + '/' + filename;
-            printf("Deleting %s...\n", fullPath.c_str());
-            ZipSync::RemoveFile(fullPath);
-        }
+
+        std::string fullPath = root + '/' + filename;
+        printf("Deleting %s...\n", fullPath.c_str());
+        ZipSync::RemoveFile(fullPath);
     }
 }
 void CommandClean(args::Subparser &parser) {
