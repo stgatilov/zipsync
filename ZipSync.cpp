@@ -453,7 +453,7 @@ public:
                     else {
                         //not present in provided manifests, but in managed zip -> drop it
                         //note that this file gets completely lost at this moment!
-                        found.get();    //nop
+                        (void)0;    //nop
                     }
                     int res = unzGoToNextFile(zf);
                     if (res == UNZ_END_OF_LIST_OF_FILE)
