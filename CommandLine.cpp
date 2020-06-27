@@ -11,14 +11,14 @@
 #include <random>
 
 
-#include <filesystem>
-namespace fs = std::experimental::filesystem::v1;
+#include "StdFilesystem.h"
 std::vector<std::string> EnumerateFilesInDirectory(const std::string &root) {
     using ZipSync::PathAR;
     std::vector<std::string> res;
-    for (auto& entry: fs::recursive_directory_iterator(fs::path(root))) {
-        if (fs::is_regular_file(entry)) {
-            std::string absPath = entry.path().generic_string();
+    std::vector<stdext::path> allPaths = stdext::recursive_directory_enumerate(stdext::path(root));
+    for (auto& entry : allPaths) {
+        if (stdext::is_regular_file(entry)) {
+            std::string absPath = entry.string();   //.generic_string()
             std::string relPath = PathAR::FromAbs(absPath, root).rel;
             res.push_back(relPath);
         }
@@ -26,13 +26,13 @@ std::vector<std::string> EnumerateFilesInDirectory(const std::string &root) {
     return res;
 }
 std::string GetCwd() {
-    return fs::current_path().generic_string();
+    return stdext::current_path().string(); //.generic_string();
 }
 size_t SizeOfFile(const std::string &path) {
-    return fs::file_size(path);
+    return stdext::file_size(path);
 }
 void CreateDirectories(const std::string &path) {
-    fs::create_directories(path);
+    stdext::create_directories(path);
 }
 
 std::string NormalizeSlashes(std::string path) {

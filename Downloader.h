@@ -4,6 +4,8 @@
 #include <vector>
 #include <map>
 #include <functional>
+#include <memory>
+#include <limits.h>
 
 
 typedef void CURL;

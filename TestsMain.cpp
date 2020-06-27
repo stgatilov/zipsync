@@ -657,7 +657,8 @@ static std::string ReadWholeFile(const std::string &filename) {
     fseek(f.get(), 0, SEEK_SET);
     std::vector<char> res;
     res.resize(size);
-    fread(res.data(), 1, size, f.get());
+    int numRead = fread(res.data(), 1, size, f.get());
+    CHECK(numRead == size);
     return std::string(res.begin(), res.end());
 }
 

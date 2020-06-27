@@ -1,6 +1,7 @@
 #include "Path.h"
 #include "Logging.h"
 #include "StdString.h"
+#include <string.h>
 
 #ifdef _WIN32
 #include <direct.h>

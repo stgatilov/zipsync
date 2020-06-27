@@ -3,6 +3,7 @@
 #include <algorithm>
 #include "Logging.h"
 #include "StdString.h"
+#include <string.h>
 #undef min
 #undef max
 

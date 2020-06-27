@@ -43,16 +43,16 @@ void Logger::verbosef   (LogCode code, const char *format, ...) { LOGHELPER(sevV
 void Logger::debugf     (LogCode code, const char *format, ...) { LOGHELPER(sevDebug); }
 void Logger::infof      (LogCode code, const char *format, ...) { LOGHELPER(sevInfo); }
 void Logger::warningf   (LogCode code, const char *format, ...) { LOGHELPER(sevWarning); }
-void Logger::errorf     (LogCode code, const char *format, ...) { LOGHELPER(sevError); }
-void Logger::fatalf     (LogCode code, const char *format, ...) { LOGHELPER(sevFatal); }
+void Logger::errorf     (LogCode code, const char *format, ...) { LOGHELPER(sevError); abort(); }
+void Logger::fatalf     (LogCode code, const char *format, ...) { LOGHELPER(sevFatal); abort(); }
 #undef LOGHELPER
 #define LOGHELPER(severity) va_list args; va_start(args, format); logv(severity, lcGeneric, format, args); va_end(args);
 void Logger::verbosef   (const char *format, ...) { LOGHELPER(sevVerbose); }
 void Logger::debugf     (const char *format, ...) { LOGHELPER(sevDebug); }
 void Logger::infof      (const char *format, ...) { LOGHELPER(sevInfo); }
 void Logger::warningf   (const char *format, ...) { LOGHELPER(sevWarning); }
-void Logger::errorf     (const char *format, ...) { LOGHELPER(sevError); }
-void Logger::fatalf     (const char *format, ...) { LOGHELPER(sevFatal); }
+void Logger::errorf     (const char *format, ...) { LOGHELPER(sevError); abort(); }
+void Logger::fatalf     (const char *format, ...) { LOGHELPER(sevFatal); abort(); }
 #undef LOGHELPER
 
 std::string formatMessage(const char *format, ...) {

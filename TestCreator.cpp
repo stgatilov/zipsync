@@ -1,6 +1,7 @@
 #include "TestCreator.h"
 #include "StdString.h"
 #include "StdFilesystem.h"
+#include <string.h>
 
 
 namespace ZipSync {

@@ -7,6 +7,7 @@
 #include <tuple>
 #include <map>
 #include <functional>
+#include <string.h>
 
 #include "minizip_extra.h"
 
@@ -132,7 +133,7 @@ IniData Manifest::WriteToIni() const {
     std::vector<const FileMetainfo*> order;
     for (const auto &f : _files)
         order.push_back(&f);
-    std::sort(order.begin(), order.end(), [](auto a, auto b) {
+    std::sort(order.begin(), order.end(), [](const FileMetainfo *a, const FileMetainfo *b) {
         return FileMetainfo::IsLess_ByZip(*a, *b);
     });
 

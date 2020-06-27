@@ -5,8 +5,12 @@
 #include "Utils.h"
 #include "StdString.h"
 #include <algorithm>
+#include <string.h>
 
 namespace ZipSync {
+
+//stupid GCC complains about printing uint64_t as "%llu"
+typedef unsigned long long uint64;
 
 HttpServer::~HttpServer() {
     Stop();
@@ -100,7 +104,7 @@ struct ChunkInfo {
     uint64_t responseStart;
     uint64_t size;
     std::string rawData;        //case 1
-    uint64_t fileStart;         //case 2
+    uint64_t fileStart;           //case 2
     bool operator< (const ChunkInfo &other) const {
         return responseStart < other.responseStart;
     }
@@ -141,7 +145,7 @@ public:
             header += _boundary;
             header += "\r\n";
             char buff[64];
-            sprintf(buff, "Content-Range: bytes %llu-%llu/%llu\r\n\r\n", arr[i].first, arr[i].second, _fileSize);
+            sprintf(buff, "Content-Range: bytes %llu-%llu/%llu\r\n\r\n", uint64(arr[i].first), uint64(arr[i].second), uint64(_fileSize));
             header += buff;
             _chunks.push_back(ChunkInfo::CreateWithData(outPos, header));
             _chunks.push_back(ChunkInfo::CreateAsFileRange(outPos, arr[i].first, arr[i].second - arr[i].first + 1));
@@ -230,9 +234,13 @@ int HttpServer::AcceptCallback(
 
     std::vector<std::pair<uint64_t, uint64_t>> ranges;
     if (const char *rangeStr = MHD_lookup_connection_value(connection, MHD_HEADER_KIND, "Range")) {
-        if (strnicmp(rangeStr, "bytes=", 6) != 0)
-            return ReturnWithErrorResponse(connection, MHD_HTTP_RANGE_NOT_SATISFIABLE, PAGE_NOT_SATISFIABLE);
         bool bad = false;
+        static const char *BYTES_PREFIX = "bytes=";
+        for (int i = 0; BYTES_PREFIX[i]; i++)
+            if (tolower(BYTES_PREFIX[i]) != tolower(rangeStr[i]))
+                bad = true;
+        if (bad)
+            return ReturnWithErrorResponse(connection, MHD_HTTP_RANGE_NOT_SATISFIABLE, PAGE_NOT_SATISFIABLE);
         std::vector<std::string> segs;
         stdext::split(segs, rangeStr + 6, ",");
         for (const std::string &s : segs) {
@@ -244,13 +252,13 @@ int HttpServer::AcceptCallback(
             }
             std::string fromStr = s.substr(0, pos);
             std::string toStr = s.substr(pos+1);
-            uint64_t from = 0;
-            uint64_t to = UINT64_MAX;
+            uint64 from = 0;
+            uint64 to = UINT64_MAX;
             if (sscanf(fromStr.c_str(), "%llu", &from) != 1)
                 bad = true;
             if (sscanf(toStr.c_str(), "%llu", &to) != 1)
                 to = fsize - 1;
-            ranges.push_back(std::make_pair(from, to));
+            ranges.emplace_back(from, to);
         }
         if (bad)
             return ReturnWithErrorResponse(connection, MHD_HTTP_RANGE_NOT_SATISFIABLE, PAGE_NOT_SATISFIABLE);
@@ -277,7 +285,7 @@ int HttpServer::AcceptCallback(
         response = MHD_create_response_from_callback(ranges[0].second - ranges[0].first + 1, _blockSize, FileDownload::FileReaderCallback, down.release(), FileDownload::FileReaderFinalize);
         httpCode = MHD_HTTP_PARTIAL_CONTENT;
         char buff[64];
-        sprintf(buff, "bytes %llu-%llu/%llu", ranges[0].first, ranges[0].second, fsize);
+        sprintf(buff, "bytes %llu-%llu/%llu", uint64(ranges[0].first), uint64(ranges[0].second), uint64(fsize));
         MHD_add_response_header(response, "Content-Range", buff);
     }
     else {

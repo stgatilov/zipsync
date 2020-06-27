@@ -4,6 +4,7 @@
 #include "Logging.h"
 #include "ZipUtils.h"
 #include "Hash.h"
+#include <string.h>
 
 
 namespace ZipSync {

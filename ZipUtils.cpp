@@ -3,6 +3,7 @@
 #include "Path.h"
 #include <algorithm>
 #include "minizip_extra.h"
+#include <string.h>
 
 
 namespace ZipSync {
