@@ -55,6 +55,10 @@ set(zipsynccmd_sources
     CommandLine.cpp
 )
 
+if(MSVC)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W2")
+    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} /Ob2")
+endif()
 
 add_library(libzipsync ${sources})
 target_link_libraries(libzipsync PUBLIC CONAN_PKG::zlib CONAN_PKG::BLAKE2 CONAN_PKG::libcurl)
@@ -63,9 +67,12 @@ set_property(TARGET libzipsync PROPERTY CXX_STANDARD 11)
 add_executable(tests ${tests_sources})
 set_property(TARGET tests PROPERTY CXX_STANDARD 17)
 target_link_libraries(tests PRIVATE libzipsync CONAN_PKG::doctest CONAN_PKG::libmicrohttpd)
-target_link_libraries(tests PRIVATE stdc++fs)
 
 add_executable(zipsync ${zipsynccmd_sources})
 set_property(TARGET zipsync PROPERTY CXX_STANDARD 17)
 target_link_libraries(zipsync PRIVATE libzipsync CONAN_PKG::args)
-target_link_libraries(zipsync PRIVATE stdc++fs)
+
+if(NOT MSVC)
+    target_link_libraries(tests PRIVATE stdc++fs)
+    target_link_libraries(zipsync PRIVATE stdc++fs)
+endif()
