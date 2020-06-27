@@ -867,6 +867,7 @@ TEST_CASE("CleanInstall") {
     //ensure no unnecessary zip repacks on clean install of something
     //even if some files are present in several provided locations / are duplicates
     for (int canRename = 0; canRename < 2; canRename++) {
+        auto tempDir = GetTempDir() / ("ci" + std::to_string(canRename));
         TestCreator tc;
         auto params = tc.GenInZipParams();
         std::vector<std::vector<uint8_t>> fileContents;
@@ -894,23 +895,20 @@ TEST_CASE("CleanInstall") {
             tc.SplitState(state, prov);
 
         HttpServer servers[2];
-        servers[0].SetRootDir((GetTempDir() / "ci_srcA").string());
-        servers[1].SetRootDir((GetTempDir() / "ci_srcB").string());
+        servers[0].SetRootDir((tempDir / "srcA").string());
+        servers[1].SetRootDir((tempDir / "srcB").string());
         servers[0].SetPortNumber(8123);
         servers[0].Start();
         servers[1].Start();
 
         Manifest targetMani;
-        stdext::remove_all(GetTempDir());
-        TestCreator::WriteState((GetTempDir() / "ci_current").string(), "", state, &targetMani);
+        TestCreator::WriteState((tempDir / "current").string(), "", state, &targetMani);
         Manifest providedMani;
-        TestCreator::WriteState((GetTempDir() / "ci_srcA").string(), servers[0].GetRootUrl(), prov[0], &providedMani);
-        TestCreator::WriteState((GetTempDir() / "ci_srcB").string(), servers[1].GetRootUrl(), prov[1], &providedMani);
-        stdext::remove_all(GetTempDir() / "ci_current");
-        stdext::create_directories(GetTempDir() / "ci_current");
+        TestCreator::WriteState((tempDir / "srcA").string(), servers[0].GetRootUrl(), prov[0], &providedMani);
+        TestCreator::WriteState((tempDir / "srcB").string(), servers[1].GetRootUrl(), prov[1], &providedMani);
 
         UpdateProcess updater;
-        updater.Init(targetMani, providedMani, (GetTempDir() / "ci_current").string());
+        updater.Init(targetMani, providedMani, (tempDir / "current").string());
         bool ok = updater.DevelopPlan(UpdateType::SameContents);
         REQUIRE(ok);
         g_testLogger->clear();
