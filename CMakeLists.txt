@@ -4,7 +4,6 @@ project(zipsync CXX C)
 option(ZIPSYNC_OPTION_BUILD_TESTS "build executable with unit tests" ON)
 option(ZIPSYNC_OPTION_BUILD_TOOL "build command-line zipsync tool" ON)
 
-set(CMAKE_CONFIGURATION_TYPES "Debug;RelWithDebInfo" CACHE STRING "" FORCE)
 
 set(lib_sources
     minizip_extra.c
@@ -55,9 +54,10 @@ set(zipsynccmd_sources
     CommandLine.cpp
 )
 
+
 if(MSVC)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W2")
-    set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} /Ob2")
+    add_compile_options("/W2")
+    add_compile_options("$<$<CONFIG:RelWithDebInfo>:/Ob2>")
 endif()
 
 
