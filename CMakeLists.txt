@@ -1,12 +1,12 @@
 cmake_minimum_required (VERSION 3.9.6)
 project(zipsync CXX C)
 
-include(${CMAKE_BINARY_DIR}/conanbuildinfo.cmake)
-conan_basic_setup(TARGETS)
+option(ZIPSYNC_OPTION_BUILD_TESTS "build executable with unit tests" ON)
+option(ZIPSYNC_OPTION_BUILD_TOOL "build command-line zipsync tool" ON)
 
 set(CMAKE_CONFIGURATION_TYPES "Debug;RelWithDebInfo" CACHE STRING "" FORCE)
 
-set(sources
+set(lib_sources
     minizip_extra.c
     minizip_extra.h
     minizip_private.h
@@ -60,19 +60,35 @@ if(MSVC)
     set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} /Ob2")
 endif()
 
-add_library(libzipsync ${sources})
-target_link_libraries(libzipsync PUBLIC CONAN_PKG::zlib CONAN_PKG::BLAKE2 CONAN_PKG::libcurl)
+
+find_package(zlib REQUIRED)
+find_package(libcurl REQUIRED)
+find_package(BLAKE2 REQUIRED)
+add_library(libzipsync STATIC ${lib_sources})
 set_property(TARGET libzipsync PROPERTY CXX_STANDARD 11)
+target_compile_definitions(libzipsync PUBLIC CURL_STATICLIB)
+target_include_directories(libzipsync PUBLIC ${zlib_INCLUDE_DIRS} ${BLAKE2_INCLUDE_DIRS} ${libcurl_INCLUDE_DIRS})
+target_link_libraries(libzipsync PUBLIC ${zlib_LIBRARIES} ${BLAKE2_LIBRARIES} ${libcurl_LIBRARIES})
 
-add_executable(tests ${tests_sources})
-set_property(TARGET tests PROPERTY CXX_STANDARD 17)
-target_link_libraries(tests PRIVATE libzipsync CONAN_PKG::doctest CONAN_PKG::libmicrohttpd)
+if(ZIPSYNC_OPTION_BUILD_TESTS)
+    find_package(doctest REQUIRED)
+    find_package(libmicrohttpd REQUIRED)
+    add_executable(tests ${tests_sources})
+    set_property(TARGET tests PROPERTY CXX_STANDARD 17)
+    target_include_directories(tests PRIVATE ${doctest_INCLUDE_DIRS} ${libmicrohttpd_INCLUDE_DIRS})
+    target_link_libraries(tests PRIVATE libzipsync ${doctest_LIBRARIES} ${libmicrohttpd_LIBRARIES})
+    if(NOT MSVC)
+        target_link_libraries(tests PRIVATE stdc++fs)
+    endif()
+endif()
 
-add_executable(zipsync ${zipsynccmd_sources})
-set_property(TARGET zipsync PROPERTY CXX_STANDARD 17)
-target_link_libraries(zipsync PRIVATE libzipsync CONAN_PKG::args)
-
-if(NOT MSVC)
-    target_link_libraries(tests PRIVATE stdc++fs)
-    target_link_libraries(zipsync PRIVATE stdc++fs)
+if(ZIPSYNC_OPTION_BUILD_TOOL)
+    find_package(args REQUIRED)
+    add_executable(zipsync ${zipsynccmd_sources})
+    set_property(TARGET zipsync PROPERTY CXX_STANDARD 17)
+    target_include_directories(zipsync PRIVATE ${args_INCLUDE_DIRS})
+    target_link_libraries(zipsync PRIVATE libzipsync ${args_LIBRARIES})
+    if(NOT MSVC)
+        target_link_libraries(zipsync PRIVATE stdc++fs)
+    endif()
 endif()

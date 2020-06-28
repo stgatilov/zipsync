@@ -3,7 +3,7 @@ from conans import ConanFile, CMake, tools
 class ZipsyncConan(ConanFile):
     name = "zipsync"
     settings = "os", "compiler", "build_type", "arch"
-    generators = "cmake"
+    generators = "cmake_find_package"
     requires = [
         "zlib/1.2.11@conan/stable",
         "libcurl/7.60.0@bincrafters/stable",
