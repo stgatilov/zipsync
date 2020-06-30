@@ -430,7 +430,9 @@ void CommandDiff(args::Subparser &parser) {
     update.RepackZips();
     ZipSync::Manifest provMani = update.GetProvidedManifest();
 
-    fullMani = provMani.Filter([](const auto &f) { return f.location == ZipSync::FileLocation::Inplace; });
+    fullMani = provMani.Filter([](const ZipSync::FileMetainfo &f) {
+        return f.location == ZipSync::FileLocation::Inplace;
+    });
     for (int i = 0; i < subtractedMani.size(); i++) {
         auto &pf = subtractedMani[i];
         pf.DontProvide();
@@ -474,7 +476,9 @@ void CommandUpdate(args::Subparser &parser) {
     printf("Provided manifests:\n");
     {
         std::string srcDir = ZipSync::GetDirPath(targetManiPath);
-        ZipSync::Manifest mani = targetManifest.Filter([](const auto &f) { return f.location != ZipSync::FileLocation::Nowhere; });
+        ZipSync::Manifest mani = targetManifest.Filter([](const ZipSync::FileMetainfo &f) {
+            return f.location != ZipSync::FileLocation::Nowhere;
+        });
         mani.ReRoot(srcDir);
         printf("  %s containing %d files of size %0.3lf MB\n",
             targetManiPath.c_str(), TotalCount(mani), TotalCompressedSize(mani) * 1e-6
@@ -488,7 +492,9 @@ void CommandUpdate(args::Subparser &parser) {
             provManiLocalPath = DownloadSimple(provManiPath, root, "  ");
         ZipSync::Manifest mani;
         mani.ReadFromIni(ZipSync::ReadIniFile(provManiLocalPath.c_str()), srcDir);
-        mani = mani.Filter([](const auto &f) { return f.location != ZipSync::FileLocation::Nowhere; });
+        mani = mani.Filter([](const ZipSync::FileMetainfo &f) {
+            return f.location != ZipSync::FileLocation::Nowhere;
+        });
         printf("  %s containing %d files of size %0.3lf MB\n",
             provManiPath.c_str(), TotalCount(mani), TotalCompressedSize(mani) * 1e-6
         );
@@ -555,7 +561,9 @@ void CommandUpdate(args::Subparser &parser) {
     update.RepackZips();
     ZipSync::Manifest provMani = update.GetProvidedManifest();
 
-    provMani = provMani.Filter([](const auto &f) { return f.location == ZipSync::FileLocation::Inplace; });
+    provMani = provMani.Filter([](const ZipSync::FileMetainfo &f) {
+        return f.location == ZipSync::FileLocation::Inplace;
+    });
     std::string resManiPath = GetPath("manifest.iniz", root);
     printf("Saving resulting manifest to %s\n", resManiPath.c_str());
     ZipSync::WriteIniFile(resManiPath.c_str(), provMani.WriteToIni());
