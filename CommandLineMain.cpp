@@ -75,7 +75,10 @@ void CommandNormalize(args::Subparser &parser) {
         outDir = NormalizeSlashes(argOutDir.Get());
     std::vector<std::string> zipPaths = CollectFilePaths(argZips.Get(), root);
 
-    DoNormalize(root, outDir, zipPaths);
+    {
+        ProgressIndicatorConsole progress;
+        DoNormalize(root, outDir, zipPaths, &progress);
+    }
 }
 
 void CommandAnalyze(args::Subparser &parser) {
@@ -102,34 +105,12 @@ void CommandAnalyze(args::Subparser &parser) {
     if (argNormalize)
         DoNormalize(root, "", zipPaths);
 
-    double totalSize = 1.0, doneSize = 0.0;
-    for (auto zip : zipPaths)
-        totalSize += SizeOfFile(zip);
-    printf("Going to analyze %d zips in %s of total size %0.3lf MB in %d threads\n", int(zipPaths.size()), root.c_str(), totalSize * 1e-6, threadsNum);
-
-    std::vector<Manifest> zipManis(zipPaths.size());
-    {
-        ProgressIndicatorConsole progress;
-        std::mutex mutex;
-        ParallelFor(0, zipPaths.size(), [&](int index) {
-            std::string zipPath = zipPaths[index];
-            {
-                std::lock_guard<std::mutex> lock(mutex);
-                progress.Update(doneSize / totalSize, "Analysing \"" + zipPath + "\"...");
-            }
-            zipManis[index].AppendLocalZip(zipPath, root, "");
-            {
-                std::lock_guard<std::mutex> lock(mutex);
-                doneSize += SizeOfFile(zipPath);
-                progress.Update(doneSize / totalSize, "Analysed  \"" + zipPath + "\"...");
-            }
-        }, threadsNum);
-        progress.Update(1.0, "Analysing done");
-    }
-
     Manifest manifest;
-    for (const auto &tm : zipManis)
-        manifest.AppendManifest(tm);
+    {
+        //TODO: auto-normalize
+        ProgressIndicatorConsole progress;
+        manifest = DoAnalyze(root, zipPaths, false, threadsNum, &progress);
+    }
     WriteIniFile(maniPath.c_str(), manifest.WriteToIni());
 }
 

@@ -35,5 +35,6 @@ int TotalCount(const ZipSync::Manifest &mani, bool providedOnly = true);
 
 void DoClean(std::string root);
 void DoNormalize(std::string root, std::string outDir, std::vector<std::string> zipPaths, ProgressIndicator *progress = nullptr);
+Manifest DoAnalyze(std::string root, std::vector<std::string> zipPaths, bool autoNormalize, int threadsNum, ProgressIndicator *progress = nullptr);
 
 }

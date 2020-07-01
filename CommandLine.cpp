@@ -229,7 +229,7 @@ void DoNormalize(std::string root, std::string outDir, std::vector<std::string> 
 
     {
         for (std::string zip : zipPaths) {
-            progress->Update(doneSize / totalSize, ("Normalizing \"" + zip + "\"...").c_str());
+            if (progress) progress->Update(doneSize / totalSize, ("Normalizing \"" + zip + "\"...").c_str());
             doneSize += SizeOfFile(zip);
             if (!outDir.empty()) {
                 std::string rel = ZipSync::PathAR::FromAbs(zip, root).rel;
@@ -240,8 +240,39 @@ void DoNormalize(std::string root, std::string outDir, std::vector<std::string> 
             else
                 ZipSync::minizipNormalize(zip.c_str());
         }
-        progress->Update(1.0, "Normalizing done");
+        if (progress) progress->Update(1.0, "Normalizing done");
     }
+}
+
+Manifest DoAnalyze(std::string root, std::vector<std::string> zipPaths, bool autoNormalize, int threadsNum, ProgressIndicator *progress) {
+    double totalSize = 1.0, doneSize = 0.0;
+    for (auto zip : zipPaths)
+        totalSize += SizeOfFile(zip);
+    printf("Going to analyze %d zips in %s of total size %0.3lf MB in %d threads\n", int(zipPaths.size()), root.c_str(), totalSize * 1e-6, threadsNum);
+
+    std::vector<Manifest> zipManis(zipPaths.size());
+    {
+        std::mutex mutex;
+        ParallelFor(0, zipPaths.size(), [&](int index) {
+            std::string zipPath = zipPaths[index];
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                if (progress) progress->Update(doneSize / totalSize, "Analysing \"" + zipPath + "\"...");
+            }
+            zipManis[index].AppendLocalZip(zipPath, root, "");
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                doneSize += SizeOfFile(zipPath);
+                if (progress) progress->Update(doneSize / totalSize, "Analysed  \"" + zipPath + "\"...");
+            }
+        }, threadsNum);
+        if (progress) progress->Update(1.0, "Analysing done");
+    }
+
+    Manifest manifest;
+    for (const auto &tm : zipManis)
+        manifest.AppendManifest(tm);
+    return manifest;
 }
 
 }
