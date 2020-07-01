@@ -40,6 +40,7 @@ public:
 //base class of Logger
 class Logger {
 public:
+    virtual ~Logger();
     virtual void Message(LogCode code, Severity severity, const char *message) = 0;
 
     void logf(Severity severity, LogCode code, const char *format, ...);

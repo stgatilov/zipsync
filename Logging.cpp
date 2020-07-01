@@ -21,6 +21,7 @@ ErrorException::ErrorException(const char *message, int code) :
     std::runtime_error(message), _code(code)
 {}
 
+Logger::~Logger() {}
 void Logger::logv(Severity severity, LogCode code, const char *format, va_list args) {
     char buff[16<<10];
     vsnprintf(buff, sizeof(buff), format, args);
