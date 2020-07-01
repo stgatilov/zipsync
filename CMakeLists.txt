@@ -51,12 +51,14 @@ set(tests_sources
 set(extralib_sources
     StdFilesystem.cpp
     StdFilesystem.h
-    Wildcards.h
     Wildcards.cpp
+    Wildcards.h
+    CommandLine.cpp
+    CommandLine.h
 )
 
 set(zipsynccmd_sources
-    CommandLine.cpp
+    CommandLineMain.cpp
 )
 
 
