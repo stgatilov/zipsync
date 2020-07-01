@@ -102,14 +102,11 @@ void CommandAnalyze(args::Subparser &parser) {
     if (argClean)
         DoClean(root);
     std::vector<std::string> zipPaths = CollectFilePaths(argZips.Get(), root);
-    if (argNormalize)
-        DoNormalize(root, "", zipPaths);
 
     Manifest manifest;
     {
-        //TODO: auto-normalize
         ProgressIndicatorConsole progress;
-        manifest = DoAnalyze(root, zipPaths, false, threadsNum, &progress);
+        manifest = DoAnalyze(root, zipPaths, argNormalize, threadsNum, &progress);
     }
     WriteIniFile(maniPath.c_str(), manifest.WriteToIni());
 }

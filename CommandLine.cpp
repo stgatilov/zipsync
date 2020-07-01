@@ -209,14 +209,14 @@ void DoClean(std::string root) {
             std::string fullOldPath = root + '/' + filename;
             std::string fullNewPath = root + '/' + shouldRestore;
             if (!ZipSync::IfFileExists(fullNewPath)) {
-                g_logger->infof("Restoring %s...\n", fullNewPath.c_str());
+                g_logger->infof("Restoring %s...", fullNewPath.c_str());
                 ZipSync::RenameFile(fullOldPath, fullNewPath);
                 continue;
             }
         }
 
         std::string fullPath = root + '/' + filename;
-        g_logger->infof("Deleting %s...\n", fullPath.c_str());
+        g_logger->infof("Deleting %s...", fullPath.c_str());
         ZipSync::RemoveFile(fullPath);
     }
 }
@@ -225,7 +225,7 @@ void DoNormalize(std::string root, std::string outDir, std::vector<std::string> 
     double totalSize = 1.0, doneSize = 0.0;
     for (auto zip : zipPaths)
         totalSize += SizeOfFile(zip);
-    g_logger->infof("Going to normalize %d zips in %s%s of total size %0.3lf MB\n", int(zipPaths.size()), (root.empty() ? "nowhere" : root.c_str()), (outDir.empty() ? " inplace" : ""), totalSize * 1e-6);
+    g_logger->infof("Going to normalize %d zips in %s%s of total size %0.3lf MB", int(zipPaths.size()), (root.empty() ? "nowhere" : root.c_str()), (outDir.empty() ? " inplace" : ""), totalSize * 1e-6);
 
     {
         for (std::string zip : zipPaths) {
@@ -248,7 +248,7 @@ Manifest DoAnalyze(std::string root, std::vector<std::string> zipPaths, bool aut
     double totalSize = 1.0, doneSize = 0.0;
     for (auto zip : zipPaths)
         totalSize += SizeOfFile(zip);
-    g_logger->infof("Going to analyze %d zips in %s of total size %0.3lf MB in %d threads\n", int(zipPaths.size()), root.c_str(), totalSize * 1e-6, threadsNum);
+    g_logger->infof("Going to analyze %d zips in %s of total size %0.3lf MB in %d threads", int(zipPaths.size()), root.c_str(), totalSize * 1e-6, threadsNum);
 
     std::vector<Manifest> zipManis(zipPaths.size());
     {
@@ -259,7 +259,23 @@ Manifest DoAnalyze(std::string root, std::vector<std::string> zipPaths, bool aut
                 std::lock_guard<std::mutex> lock(mutex);
                 if (progress) progress->Update(doneSize / totalSize, "Analysing \"" + zipPath + "\"...");
             }
-            zipManis[index].AppendLocalZip(zipPath, root, "");
+
+            if (autoNormalize) {
+                try {
+                    //try to analyze "as is"
+                    zipManis[index].AppendLocalZip(zipPath, root, "");
+                }
+                catch(const ErrorException &e) {
+                    zipManis[index].Clear();
+                    //failed: normalize and retry
+                    ZipSync::minizipNormalize(zipPath.c_str());
+                    zipManis[index].AppendLocalZip(zipPath, root, "");
+                }
+            }
+            else {
+                zipManis[index].AppendLocalZip(zipPath, root, "");
+            }
+
             {
                 std::lock_guard<std::mutex> lock(mutex);
                 doneSize += SizeOfFile(zipPath);
@@ -268,6 +284,8 @@ Manifest DoAnalyze(std::string root, std::vector<std::string> zipPaths, bool aut
         }, threadsNum);
         if (progress) progress->Update(1.0, "Analysing done");
     }
+
+    g_logger->infof("Analysis finished successfully");
 
     Manifest manifest;
     for (const auto &tm : zipManis)
