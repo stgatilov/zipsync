@@ -209,14 +209,14 @@ void DoClean(std::string root) {
             std::string fullOldPath = root + '/' + filename;
             std::string fullNewPath = root + '/' + shouldRestore;
             if (!ZipSync::IfFileExists(fullNewPath)) {
-                g_logger->infof("Restoring %s...", fullNewPath.c_str());
+                g_logger->infof("Restoring %s...", shouldRestore.c_str());
                 ZipSync::RenameFile(fullOldPath, fullNewPath);
                 continue;
             }
         }
 
         std::string fullPath = root + '/' + filename;
-        g_logger->infof("Deleting %s...", fullPath.c_str());
+        g_logger->infof("Deleting %s...", filename.c_str());
         ZipSync::RemoveFile(fullPath);
     }
 }
@@ -229,11 +229,11 @@ void DoNormalize(std::string root, std::string outDir, std::vector<std::string> 
 
     {
         for (std::string zip : zipPaths) {
-            if (progress) progress->Update(doneSize / totalSize, ("Normalizing \"" + zip + "\"...").c_str());
+            std::string zipRel = PathAR::FromAbs(zip, root).rel;
+            if (progress) progress->Update(doneSize / totalSize, ("Normalizing \"" + zipRel + "\"...").c_str());
             doneSize += SizeOfFile(zip);
             if (!outDir.empty()) {
-                std::string rel = ZipSync::PathAR::FromAbs(zip, root).rel;
-                std::string zipOut = ZipSync::PathAR::FromRel(rel, outDir).abs;
+                std::string zipOut = ZipSync::PathAR::FromRel(zipRel, outDir).abs;
                 ZipSync::CreateDirectoriesForFile(zipOut, outDir);
                 ZipSync::minizipNormalize(zip.c_str(), zipOut.c_str());
             }
@@ -255,9 +255,10 @@ Manifest DoAnalyze(std::string root, std::vector<std::string> zipPaths, bool aut
         std::mutex mutex;
         ParallelFor(0, zipPaths.size(), [&](int index) {
             std::string zipPath = zipPaths[index];
+            std::string zipPathRel = PathAR::FromAbs(zipPath, root).rel;
             {
                 std::lock_guard<std::mutex> lock(mutex);
-                if (progress) progress->Update(doneSize / totalSize, "Analysing \"" + zipPath + "\"...");
+                if (progress) progress->Update(doneSize / totalSize, "Analysing \"" + zipPathRel + "\"...");
             }
 
             if (autoNormalize) {
@@ -279,7 +280,7 @@ Manifest DoAnalyze(std::string root, std::vector<std::string> zipPaths, bool aut
             {
                 std::lock_guard<std::mutex> lock(mutex);
                 doneSize += SizeOfFile(zipPath);
-                if (progress) progress->Update(doneSize / totalSize, "Analysed  \"" + zipPath + "\"...");
+                if (progress) progress->Update(doneSize / totalSize, "Analysed  \"" + zipPathRel + "\"...");
             }
         }, threadsNum);
         if (progress) progress->Update(1.0, "Analysing done");
