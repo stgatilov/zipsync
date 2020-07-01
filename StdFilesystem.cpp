@@ -7,7 +7,7 @@
 	//TODO: support later versions of MSVC
 #else
 	//it should be here for both GCC and Clang
-    //MSVC2017 is also OK with it
+	//MSVC2017 is also OK with it
 	#include <experimental/filesystem>
 	namespace stdfsys = std::experimental::filesystem::v1;
 #endif
@@ -63,6 +63,9 @@ namespace stdext {
 	}
 	path path::stem() const {
 		return path_impl(d->stem());
+	}
+	bool path::is_absolute() const {
+		return d->is_absolute();
 	}
 	path& path::remove_filename() {
 		d->remove_filename();
@@ -168,6 +171,16 @@ namespace stdext {
 				res = stdfsys::current_path();
 			#endif
 		}
+		catch(stdfsys::filesystem_error &e) { throw filesystem_error(e.what(), e.code()); }
+		return path(res);
+	}
+	void current_path(const path& to) {
+		try { stdfsys::current_path(get(to)); }
+		catch(stdfsys::filesystem_error &e) { throw filesystem_error(e.what(), e.code()); }
+	}
+	path canonical(const path& p) {
+		path_impl res;
+		try { res = stdfsys::canonical(get(p)); }
 		catch(stdfsys::filesystem_error &e) { throw filesystem_error(e.what(), e.code()); }
 		return path(res);
 	}

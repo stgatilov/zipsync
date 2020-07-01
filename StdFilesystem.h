@@ -32,6 +32,7 @@ namespace stdext {
 		path filename() const;
 		path extension() const;
 		path stem() const;
+		bool is_absolute() const;
 		path& remove_filename();
 
 	private:
@@ -59,6 +60,8 @@ namespace stdext {
 	void rename(const path &from, const path &to);
 	std::string extension(const path &path);
 	path current_path();
+	void current_path(const path& to);
+	path canonical(const path& path);
 
 	//below is some replacement for C++ iterator mess
 	//(cost of memory allocation should be negligible compare to cost of filesystem access)
