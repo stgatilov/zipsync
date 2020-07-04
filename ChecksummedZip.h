@@ -8,6 +8,9 @@
 
 namespace ZipSync {
 
+extern const char *CHECKSUMMED_HASH_FILENAME;
+extern const char *CHECKSUMMED_HASH_PREFIX;
+
 class Downloader;
 
 //saves zip archive at zipPath with single file named dataFilename and containing [data..data+size] bytes

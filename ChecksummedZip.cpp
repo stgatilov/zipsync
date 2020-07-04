@@ -7,17 +7,19 @@
 
 namespace ZipSync {
 
-static const char *HASH_FILENAME = "hash.txt";
-static const char *HASH_PREFIX = "zsMH:";
+const char *CHECKSUMMED_HASH_FILENAME = "hash.txt";
+const char *CHECKSUMMED_HASH_PREFIX = "zsMH:";
+static const int HASH_PREFIX_LEN = strlen(CHECKSUMMED_HASH_PREFIX);
+static const int HASH_SIZE = HashDigest().Hex().size();
 
 void WriteChecksummedZip(const char *zipPath, const void *data, uint32_t size, const char *dataFilename) {
-    std::string hash = HASH_PREFIX + Hasher().Update(data, size).Finalize().Hex();
+    std::string hash = CHECKSUMMED_HASH_PREFIX + Hasher().Update(data, size).Finalize().Hex();
 
     ZipFileHolder zf(zipPath);
     zip_fileinfo info = {0};
     info.dosDate = 0x28210000;  //1 January 2000 --- set it just to make date valid
 
-    SAFE_CALL(zipOpenNewFileInZip(zf, HASH_FILENAME, &info, NULL, 0, NULL, 0, NULL, Z_NO_COMPRESSION, Z_NO_COMPRESSION));
+    SAFE_CALL(zipOpenNewFileInZip(zf, CHECKSUMMED_HASH_FILENAME, &info, NULL, 0, NULL, 0, NULL, Z_NO_COMPRESSION, Z_NO_COMPRESSION));
     SAFE_CALL(zipWriteInFileInZip(zf, hash.data(), hash.size()));
     SAFE_CALL(zipCloseFileInZip(zf));
 
@@ -27,23 +29,21 @@ void WriteChecksummedZip(const char *zipPath, const void *data, uint32_t size, c
 }
 
 HashDigest GetHashOfChecksummedZip(const char *zipPath) {
-    static const int EXPECTED_HASHFILE_SIZE = strlen(HASH_PREFIX) + HashDigest().Hex().size();
-
     UnzFileHolder zf(zipPath);
-    SAFE_CALL(unzLocateFile(zf, "hash.txt", true));
+    SAFE_CALL(unzLocateFile(zf, CHECKSUMMED_HASH_FILENAME, true));
 
     unz_file_info info;
     SAFE_CALL(unzGetCurrentFileInfo(zf, &info, NULL, 0, NULL, 0, NULL, 0));
-    ZipSyncAssert(info.uncompressed_size == EXPECTED_HASHFILE_SIZE);
+    ZipSyncAssert(info.uncompressed_size == HASH_PREFIX_LEN + HASH_SIZE);
 
-    std::vector<char> text(EXPECTED_HASHFILE_SIZE);
+    std::vector<char> text(info.uncompressed_size);
     SAFE_CALL(unzOpenCurrentFile(zf));
     int read = unzReadCurrentFile(zf, text.data(), text.size());
-    ZipSyncAssert(read == EXPECTED_HASHFILE_SIZE);
+    ZipSyncAssert(read == text.size());
     SAFE_CALL(unzCloseCurrentFile(zf));
 
-    ZipSyncAssert(memcmp(text.data(), HASH_PREFIX, strlen(HASH_PREFIX)) == 0);
-    std::string hex(text.begin() + strlen(HASH_PREFIX), text.end());
+    ZipSyncAssert(memcmp(text.data(), CHECKSUMMED_HASH_PREFIX, strlen(CHECKSUMMED_HASH_PREFIX)) == 0);
+    std::string hex(text.begin() + strlen(CHECKSUMMED_HASH_PREFIX), text.end());
     HashDigest hash;
     hash.Parse(hex.c_str());
     return hash;
@@ -88,10 +88,10 @@ std::vector<HashDigest> GetHashesOfRemoteChecksummedZips(Downloader &downloader,
     std::vector<HashDigest> remoteHashes(n);
     for (int i = 0; i < n; i++) {
         std::string bytes(startData[i].begin(), startData[i].end());
-        int pos = (int)bytes.find(HASH_PREFIX);
-        if (pos < 0 || pos + HashDigest().Hex().size() >= bytes.size())
+        int pos = (int)bytes.find(CHECKSUMMED_HASH_PREFIX);
+        if (pos < 0 || pos + HASH_PREFIX_LEN + HASH_SIZE >= bytes.size())
             continue;
-        std::string hex = bytes.substr(pos, HashDigest().Hex().size());
+        std::string hex = bytes.substr(pos + HASH_PREFIX_LEN, HASH_SIZE);
         bool bad = false;
         for (char c : hex)
             if (!(isdigit(c) || c >= 'a' && c <= 'f'))
