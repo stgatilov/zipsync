@@ -43,8 +43,9 @@ HashDigest GetHashOfChecksummedZip(const char *zipPath) {
     SAFE_CALL(unzCloseCurrentFile(zf));
 
     ZipSyncAssert(memcmp(text.data(), HASH_PREFIX, strlen(HASH_PREFIX)) == 0);
+    std::string hex(text.begin() + strlen(HASH_PREFIX), text.end());
     HashDigest hash;
-    hash.Parse(text.data() + strlen(HASH_PREFIX));
+    hash.Parse(hex.c_str());
     return hash;
 }
 
