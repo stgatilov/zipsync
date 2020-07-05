@@ -581,7 +581,7 @@ void UpdateProcess::RepackZips() {
     impl.DoAll();
 }
 
-void UpdateProcess::DownloadRemoteFiles(const GlobalProgressCallback &progressCallback) {
+uint64_t UpdateProcess::DownloadRemoteFiles(const GlobalProgressCallback &progressCallback) {
     struct UrlData {
         PathAR path;
         StdioFileHolder file;
@@ -710,6 +710,7 @@ void UpdateProcess::DownloadRemoteFiles(const GlobalProgressCallback &progressCa
         AddManagedZip(state.path.abs);
     }
 
+    return downloader.TotalBytesDownloaded();
 }
 
 }
