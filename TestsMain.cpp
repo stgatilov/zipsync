@@ -1046,6 +1046,42 @@ TEST_CASE("ChecksummedZip") {
     CHECK(downTotal1 <= sumDownloadSizes + NUM * 1024);
 }
 
+TEST_CASE("BugAsciiOrBinary") {
+    TestCreator rnd;
+    for (int dataAscii = 0; dataAscii < 2; dataAscii++) {
+        for (int attrAscii = 0; attrAscii < 2; attrAscii++) {
+            auto tempDir = GetTempDir() / "ascii" / (std::to_string(dataAscii) + std::to_string(attrAscii));
+            stdext::create_directories(tempDir);
+
+            zip_fileinfo info = {0};
+            info.internal_fa = attrAscii;
+
+            {
+                ZipFileHolder zf((tempDir / "z.zip").string().c_str());
+                SAFE_CALL(zipOpenNewFileInZip(zf, (dataAscii ? "temp.txt" : "temp.bin"), &info, 0, 0, 0, 0, 0, Z_DEFLATED, Z_BEST_COMPRESSION));
+                char buff[64<<10] = {0};
+                for (int i = 0; i < 50000; i++) {
+                    if (dataAscii)
+                        buff[i] = rnd.RndInt('a', 'z');
+                    else
+                        buff[i] = rnd.RndInt(0, 3) == 0 ? rnd.RndInt(0, 255) : rnd.RndInt(0, 100);
+                }
+                SAFE_CALL(zipWriteInFileInZip(zf, buff, 50000));
+                SAFE_CALL(zipCloseFileInZip(zf));
+            }
+
+            {
+                UnzFileHolder zf((tempDir / "z.zip").string().c_str());
+                SAFE_CALL(unzLocateFile(zf, (dataAscii ? "temp.txt" : "temp.bin"), 0));
+                unz_file_info info = {0};
+                SAFE_CALL(unzGetCurrentFileInfo(zf, &info, 0, 0, 0, 0, 0, 0));
+                CHECK(info.internal_fa == attrAscii);
+            }
+        }
+    }
+
+}
+
 
 TEST_CASE("FuzzLocal50") {
     Fuzz((GetTempDir() / "FL50").string(), 50, false);
