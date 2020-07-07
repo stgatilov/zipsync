@@ -12,6 +12,7 @@
 #include "Downloader.h"
 #include "TestCreator.h"
 #include "ChecksummedZip.h"
+#include "minizip_extra.h"
 using namespace ZipSync;
 
 #include <zip.h>
@@ -1067,6 +1068,8 @@ TEST_CASE("BugAsciiOrBinary") {
                         buff[i] = rnd.RndInt(0, 3) == 0 ? rnd.RndInt(0, 255) : rnd.RndInt(0, 100);
                 }
                 SAFE_CALL(zipWriteInFileInZip(zf, buff, 50000));
+                //note: here is the fix for the problem --- force ASCII/binary type in zlib stream
+                SAFE_CALL(zipForceDataType(zf, info.internal_fa));
                 SAFE_CALL(zipCloseFileInZip(zf));
             }
 
