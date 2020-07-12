@@ -766,12 +766,13 @@ TEST_CASE("Downloader") {
             }
             double progressRatio = -1.0;
             int progressCnt = 0;
-            GlobalProgressCallback progressCallback = [&](double ratio, const char *message) {
+            GlobalProgressCallback progressCallback = [&](double ratio, const char *message) -> int {
                 if (progressCnt == 0)
                     CHECK(ratio == 0.0);
                 CHECK(ratio >= progressRatio);
                 progressRatio = ratio;
                 progressCnt++;
+                return 0;
             };
             down.SetProgressCallback(progressCallback);
             down.DownloadAll();
