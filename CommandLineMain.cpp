@@ -216,13 +216,14 @@ void CommandPatch(args::Subparser &parser) {
     std::map<std::string, ManifestIter> fullnameToIter;
     for (int i = 0; i < patchMani.size(); i++) {
         const FileMetainfo &mf = patchMani[i];
+        ZipSyncAssertF(mf.location != FileLocation::Nowhere, "Patch manifest must provide all files it decribes");
         std::string fullname = GetFullPath(mf.zipPath.rel, mf.filename);
         fullnameToIter[fullname] = ManifestIter(patchMani, &mf);
     }
 
     printf("Applying patch with %d files of size %0.3lf MB to base set with %d files of size %0.3lf MB\n", 
         TotalCount(patchMani), TotalCompressedSize(patchMani) * 1e-6,
-        TotalCount(baseMani), TotalCompressedSize(baseMani) * 1e-6
+        TotalCount(baseMani, false), TotalCompressedSize(baseMani, false) * 1e-6
     );
 
     std::vector<bool> usedPatchIds(patchMani.size(), false);
@@ -235,14 +236,16 @@ void CommandPatch(args::Subparser &parser) {
             //overriden by patch
             ManifestIter iter = mit->second;
             usedPatchIds[iter._index] = true;
-            printf("  Overriden %s: size %u -> %u  hash %s -> %s\n",
+            printf("  Replaced %s: size %u -> %u  hash %s -> %s\n",
                 fullname.c_str(), iter->props.contentsSize, mf.props.contentsSize,
                 iter->contentsHash.Hex().c_str(), mf.contentsHash.Hex().c_str()
             );
         }
-        //provided by base
-        mf.DontProvide();
-        outMani.AppendFile(mf);
+        else {
+            //provided by base
+            mf.DontProvide();
+            outMani.AppendFile(mf);
+        }
     }
 
     for (int i = 0; i < patchMani.size(); i++) {
