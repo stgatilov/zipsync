@@ -57,6 +57,11 @@ void HttpServer::Start() {
     ZipSyncAssertF(_daemon, "Failed to start microhttpd on port %d", _port);
 }
 
+struct ThreadState {
+    int callCount = 0;
+};
+thread_local ThreadState threadState;
+
 int HttpServer::MhdFunction(
     void *cls,
     MHD_Connection *connection,
@@ -71,14 +76,16 @@ int HttpServer::MhdFunction(
     if (0 != strcmp(method, "GET"))
         return MHD_NO;
 
-    static int dummy;
-    if (*ptr != &dummy) {
-        //this call only shows headers
-        *ptr = &dummy;
+    //clear thread state and associate it with request
+    if (*ptr == NULL)
+        threadState = ThreadState();
+    *ptr = &threadState;
+
+    threadState.callCount++;
+    if (threadState.callCount == 1) {
+        //first call only shows headers
         return MHD_YES;
     }
-    //clear back to initial state
-    *ptr = 0;
 
     return ((HttpServer*)cls)->AcceptCallback(connection, url, method, version);
 }
