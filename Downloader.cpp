@@ -238,7 +238,7 @@ bool Downloader::DownloadOneRequest(const std::string &url, const std::vector<in
         g_logger->errorf(lcUserInterrupt, "Interrupted by user");
     if (ret == CURLE_OPERATION_TIMEDOUT) {
         g_logger->warningf(lcDownloadTooSlow,
-            "Speed timeout for request with %d segments of total size %lld on URL %s",
+            "Timeout for request with %d segments of total size %lld on URL %s",
             int(downloadIds.size()), thisEstimate, url.c_str()
         );
         return false;   //soft fail: retry is welcome
