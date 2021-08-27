@@ -897,7 +897,7 @@ TEST_CASE("Downloader") {
         }
     }
 
-    {   //test Downloader::setMultipartBlocked
+    {   //test Downloader::SetMultipartBlocked
         HttpServer server;
         server.SetDropMultipart(true);
         server.SetRootDir(GetTempDir().string());
@@ -909,7 +909,7 @@ TEST_CASE("Downloader") {
             down.EnqueueDownload(DownloadSource(server.GetRootUrl() + "subdir/squares.txt", 30000, 30200), CreateDownloadCallback(data2));
             down.EnqueueDownload(DownloadSource(server.GetRootUrl() + "subdir/squares.txt", 20000, 20500), CreateDownloadCallback(data3));
             down.EnqueueDownload(DownloadSource(server.GetRootUrl() + "subdir/squares.txt", 10100, 10345), CreateDownloadCallback(data4));
-            down.setMultipartBlocked(nomultipart);
+            down.SetMultipartBlocked(nomultipart);
             if (nomultipart) {
                 down.DownloadAll();
                 CHECK(data1 == DataSquaresTxt.substr(10000, 100));

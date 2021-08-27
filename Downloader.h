@@ -31,6 +31,7 @@ typedef std::function<void(const void*, uint32_t)> DownloadFinishedCallback;
 //called during download to report progress: returning nonzero value interrupts download
 typedef std::function<int(double, const char*)> GlobalProgressCallback;
 
+
 /**
  * Smart downloader over HTTP protocol.
  * Utilizes multipart byteranges requests to download many chunks quickly.
@@ -39,19 +40,27 @@ class Downloader {
     bool _silentErrors = false;
     std::unique_ptr<std::string> _useragent;
     bool _blockMultipart = false;
+    GlobalProgressCallback _progressCallback;
+
     struct Download {
         DownloadSource src;
         DownloadFinishedCallback finishedCallback;
+        std::vector<uint8_t> answer;        //temporary storage (in case of split)
     };
     std::vector<Download> _downloads;
-    GlobalProgressCallback _progressCallback;
+
     struct UrlState {
-        int doneCnt = 0;
+        int doneCnt = 0;                    //how many FULL downloads done
+        uint32_t doneBytesNext = 0;         //how many bytes done from next download
         std::vector<int> downloadsIds;      //sorted by starting offset
         int speedProfile = 0;               //index in SPEED_PROFILES
     };
     std::map<std::string, UrlState> _urlStates;
 
+    struct SubTask {
+        int downloadIdx;                     //index in _downloads
+        uint32_t byterange[2];               //can be part of download's byterange
+    };
     struct CurlResponse {
         std::string url;
 
@@ -64,6 +73,7 @@ class Downloader {
         double progressWeight = 0.0;        //this request size / total size of all downloads
     };
     std::unique_ptr<CurlResponse> _currResponse;
+
     double _totalProgress = 0.0;            //which portion of DownloadAll is complete (without current request)
     int64_t _totalBytesDownloaded = 0;      //how many bytes downloaded in total (without current request)
 
@@ -81,17 +91,17 @@ public:
     //silent == true: just don't call callback function for failed requests (grouped by url), no stopping, no exception
     void SetErrorMode(bool silent);
     void SetUserAgent(const char *useragent);
-    void setMultipartBlocked(bool blocked);
+    void SetMultipartBlocked(bool blocked);
     void DownloadAll();
 
     int64_t TotalBytesDownloaded() const { return _totalBytesDownloaded; }
 
 private:
     void DownloadAllForUrl(const std::string &url);
-    bool DownloadOneRequest(const std::string &url, const std::vector<int> &downloadIds, int lowSpeedTime, int connectTimeout);
+    bool DownloadOneRequest(const std::string &url, const std::vector<SubTask> &subtasks, int lowSpeedTime, int connectTimeout);
     void BreakMultipartResponse(const CurlResponse &response, std::vector<CurlResponse> &parts);
     int UpdateProgress();
-    size_t BytesToTransfer(const Download &download);
+    size_t BytesToTransfer(const uint32_t byterange[2]);
 };
 
 }

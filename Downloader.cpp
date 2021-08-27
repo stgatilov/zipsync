@@ -36,7 +36,7 @@ static const int ESTIMATED_DOWNLOAD_OVERHEAD = 100;
 namespace ZipSync {
 
 //note: HTTP header field names are case-insensitive
-//however, we cannot just lowercase all headers, since multipary boundary is case-sensitive
+//however, we cannot just lowercase all headers, since multipart boundary is case-sensitive
 const char *CheckHttpPrefix(const std::string &line, const std::string &prefix) {
     if (!stdext::istarts_with(line, prefix))
         return nullptr;
@@ -68,7 +68,7 @@ void Downloader::SetUserAgent(const char *useragent) {
         _useragent.reset();
 }
 
-void Downloader::setMultipartBlocked(bool blocked) {
+void Downloader::SetMultipartBlocked(bool blocked) {
     _blockMultipart = blocked;
 }
 
@@ -122,29 +122,61 @@ void Downloader::DownloadAllForUrl(const std::string &url) {
         int rangesCnt = 0;
         int end = state.doneCnt;
         uint32_t last = UINT32_MAX;
-        std::vector<int> ids;
+        std::vector<SubTask> subtasks;
+
         while (end < n) {
             int idx = state.downloadsIds[end];
             const Download &down = _downloads[idx];
+            uint32_t downStart = down.src.byterange[0] + state.doneBytesNext;
+            uint32_t downEnd = down.src.byterange[1];
+
             //estimate quantities if we add this download
-            uint64_t newTotalSize = totalSize + (down.src.byterange[1] - down.src.byterange[0]);
-            int newRangesCnt = rangesCnt + (last != down.src.byterange[0]);
-            //stop before this download if some limit will be exceeded
-            //but only if we have added at least once download already
-            if (ids.size() > 0 && (newRangesCnt > profile.maxPartsPerRequest || newTotalSize > profile.maxRequestSize))
+            uint64_t newTotalSize = totalSize + (downEnd - downStart);
+            int newRangesCnt = rangesCnt + (last != downStart);
+
+            //stop before this download if it exceeds ranges limit
+            if (newRangesCnt > profile.maxPartsPerRequest)
                 break;
-            //add this download to request
+            if (newTotalSize > profile.maxRequestSize) {
+                if (subtasks.size() > 0) {
+                    //we have added at least one download already,
+                    //don't take a new one with size limit overflow
+                    break;
+                }
+                if (downEnd != UINT32_MAX) {
+                    //this download is larger than limit: split it and download part only
+                    SubTask st = {idx, {downStart, downStart + profile.maxRequestSize}};
+                    subtasks.push_back(st);
+                    break;
+                }
+                //single request with unknown size: never split...
+            }
+
+            //add this full download to request
             end++;
-            ids.push_back(idx);
-            last = down.src.byterange[1];
+            SubTask st = {idx, {downStart, downEnd}};
+            subtasks.push_back(st);
+            last = downEnd;
             totalSize = newTotalSize;
             rangesCnt = newRangesCnt;
         }
 
-        bool ok = DownloadOneRequest(url, ids, profile.lowSpeedTime, profile.connectTimeout);
+        bool ok = DownloadOneRequest(url, subtasks, profile.lowSpeedTime, profile.connectTimeout);
 
         if (ok) {
+            //update number of finished downloads
             state.doneCnt = end;
+            //update progress in the next download
+            if (end < state.downloadsIds.size() && subtasks.back().downloadIdx == state.downloadsIds[end]) {
+                //partly finished
+                int idx = subtasks.back().downloadIdx;
+                state.doneBytesNext = subtasks.back().byterange[1] - _downloads[idx].src.byterange[0];
+            }
+            else {
+                //fully finished
+                state.doneBytesNext = 0;
+            }
+            //reset speed profile to fastest one
             state.speedProfile = 0;
         }
         else {
@@ -154,17 +186,16 @@ void Downloader::DownloadAllForUrl(const std::string &url) {
     }
 }
 
-bool Downloader::DownloadOneRequest(const std::string &url, const std::vector<int> &downloadIds, int lowSpeedTime, int connectTimeout) {
-    if (downloadIds.empty())
+bool Downloader::DownloadOneRequest(const std::string &url, const std::vector<SubTask> &subtasks, int lowSpeedTime, int connectTimeout) {
+    if (subtasks.empty())
         return true;
 
     std::vector<std::pair<uint32_t, uint32_t>> coaslescedRanges;
-    for (int idx : downloadIds) {
-        const auto &down = _downloads[idx];
-        if (!coaslescedRanges.empty() && coaslescedRanges.back().second >= down.src.byterange[0])
-            coaslescedRanges.back().second = std::max(coaslescedRanges.back().second, down.src.byterange[1]);
+    for (const SubTask &st : subtasks) {
+        if (!coaslescedRanges.empty() && coaslescedRanges.back().second >= st.byterange[0])
+            coaslescedRanges.back().second = std::max(coaslescedRanges.back().second, st.byterange[1]);
         else
-            coaslescedRanges.push_back(std::make_pair(down.src.byterange[0], down.src.byterange[1]));
+            coaslescedRanges.push_back(std::make_pair(st.byterange[0], st.byterange[1]));
     }
     std::string byterangeStr;
     for (auto rng : coaslescedRanges) {
@@ -177,10 +208,10 @@ bool Downloader::DownloadOneRequest(const std::string &url, const std::vector<in
 
     int64_t totalEstimate = 0;
     int64_t thisEstimate = 0;
-    for (int idx : downloadIds)
-        thisEstimate += BytesToTransfer(_downloads[idx]);
+    for (const SubTask &st : subtasks)
+        thisEstimate += BytesToTransfer(st.byterange);
     for (const auto &down : _downloads)
-        totalEstimate += BytesToTransfer(down);
+        totalEstimate += BytesToTransfer(down.src.byterange);
 
     auto header_callback = [](char *buffer, size_t size, size_t nitems, void *userdata) {
         size *= nitems;
@@ -259,7 +290,7 @@ bool Downloader::DownloadOneRequest(const std::string &url, const std::vector<in
     if (ret == CURLE_OPERATION_TIMEDOUT) {
         g_logger->warningf(lcDownloadTooSlow,
             "Timeout for request with %d segments of total size %lld on URL %s",
-            int(downloadIds.size()), thisEstimate, url.c_str()
+            int(subtasks.size()), thisEstimate, url.c_str()
         );
         return false;   //soft fail: retry is welcome
     }
@@ -283,14 +314,10 @@ bool Downloader::DownloadOneRequest(const std::string &url, const std::vector<in
     std::sort(results.begin(), results.end(), [](const CurlResponse &a, const CurlResponse &b) {
         return a.onerange[0] < b.onerange[0];
     });
-    for (int idx : downloadIds) {
+    for (const SubTask &st : subtasks) {
+        int idx = st.downloadIdx;
         const auto &downSrc = _downloads[idx].src;
-        uint32_t totalSize = UINT32_MAX;
-        std::vector<uint8_t> answer;
-        if (downSrc.byterange[1] != UINT32_MAX) {
-            totalSize = downSrc.byterange[1] - downSrc.byterange[0];
-            answer.reserve(totalSize);
-        }
+        std::vector<uint8_t> &answer = _downloads[idx].answer;
         for (const auto &resp : results) {
             uint32_t currPos = downSrc.byterange[0] + (uint32_t)answer.size();
             uint32_t left = std::max(currPos, resp.onerange[0]);
@@ -303,10 +330,15 @@ bool Downloader::DownloadOneRequest(const std::string &url, const std::vector<in
                 resp.data.data() + (right - resp.onerange[0])
             );
         }
-        if (downSrc.byterange[1] != UINT32_MAX) {
-            ZipSyncAssertF(answer.size() == totalSize, "Missing end chunk %zu..%u (%u bytes) after downloading URL %s", answer.size(), totalSize, totalSize - (uint32_t)answer.size(), url.c_str());
+        if (st.byterange[1] >= downSrc.byterange[1]) {
+            if (downSrc.byterange[1] != UINT32_MAX) {
+                uint32_t totalSize = downSrc.byterange[1] - downSrc.byterange[0];
+                ZipSyncAssertF(answer.size() == totalSize, "Missing end chunk %zu..%u (%u bytes) after downloading URL %s", answer.size(), totalSize, totalSize - (uint32_t)answer.size(), url.c_str());
+            }
+            _downloads[idx].finishedCallback(answer.data(), answer.size());
+            answer.clear();
+            answer.shrink_to_fit();
         }
-        _downloads[idx].finishedCallback(answer.data(), answer.size());
     }
 
     return true;
@@ -371,9 +403,9 @@ int Downloader::UpdateProgress() {
     return 0;
 }
 
-size_t Downloader::BytesToTransfer(const Download &download) {
-    size_t dataSize = download.src.byterange[1] - download.src.byterange[0];
-    if (download.src.byterange[1] == UINT32_MAX)
+size_t Downloader::BytesToTransfer(const uint32_t byterange[2]) {
+    size_t dataSize = byterange[1] - byterange[0];
+    if (byterange[1] == UINT32_MAX)
         dataSize = (1<<20); //a wild guess =)
     return dataSize + ESTIMATED_DOWNLOAD_OVERHEAD;
 }
