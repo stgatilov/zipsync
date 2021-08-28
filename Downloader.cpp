@@ -122,6 +122,8 @@ void Downloader::DownloadAll() {
 void Downloader::DownloadAllForUrl(const std::string &url) {
     UrlState &state = _urlStates.find(url)->second;
     int n = state.downloadsIds.size();
+    int64_t speedLastFailedAt[SPEED_PROFILES_NUM];
+    memset(speedLastFailedAt, -1, sizeof(speedLastFailedAt));
 
     while (state.doneCnt < n) {
         ZipSyncAssertF(state.speedProfile < SPEED_PROFILES_NUM, "Repeated timeout on URL %s", url.c_str());
@@ -187,11 +189,18 @@ void Downloader::DownloadAllForUrl(const std::string &url) {
                 //fully finished
                 state.doneBytesNext = 0;
             }
-            //reset speed profile to fastest one
-            state.speedProfile = 0;
+            //reset speed profile
+            for (int i = 0; i < state.speedProfile; i++)
+                if (speedLastFailedAt[i] < 0 || _totalBytesDownloaded - speedLastFailedAt[i] > SPEED_PROFILES[i].maxRequestSize) {
+                    //last time we failed with this long time ago
+                    //so let's try this speed again
+                    state.speedProfile = i;
+                    break;
+                }
         }
         else {
             //soft fail: retry with less strict limits
+            speedLastFailedAt[state.speedProfile] = _totalBytesDownloaded;
             state.speedProfile++;
         }
     }
