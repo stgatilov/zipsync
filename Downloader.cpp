@@ -58,6 +58,8 @@ void Downloader::EnqueueDownload(const DownloadSource &source, const DownloadFin
     down.src = source;
     down.finishedCallback = finishedCallback;
 
+    //note: we save our initial estimates here and use it throughout the whole run
+    //even though we will detect file size for whole-file downloads later, we still use initial estimates for computing progress
     down.progressSize = down.src.byterange[1] - down.src.byterange[0];
     if (down.src.byterange[1] == UINT_MAX)
         down.progressSize = (1<<20);    //rough estimate of unknown size
@@ -89,6 +91,7 @@ void Downloader::DownloadAll() {
 
     _curlHandle.reset(curl_easy_init());
 
+    //distribute downloads across remote files / urls
     for (int i = 0; i <  _downloads.size(); i++)
         _urlStates[_downloads[i].src.url].downloadsIds.push_back(i);
     for (auto &pKV : _urlStates) {
@@ -99,6 +102,7 @@ void Downloader::DownloadAll() {
         });
     }
 
+    //go over remote files and process them one by one
     for (const auto &pKV : _urlStates) {
         std::string url = pKV.first;
         try {
@@ -122,22 +126,27 @@ void Downloader::DownloadAll() {
 void Downloader::DownloadAllForUrl(const std::string &url) {
     UrlState &state = _urlStates.find(url)->second;
     int n = state.downloadsIds.size();
+
+    //used to occasionally restore faster speed profiles
     int64_t speedLastFailedAt[SPEED_PROFILES_NUM];
     memset(speedLastFailedAt, -1, sizeof(speedLastFailedAt));
 
     while (state.doneCnt < n) {
+        //select speed profile
         ZipSyncAssertF(state.speedProfile < SPEED_PROFILES_NUM, "Repeated timeout on URL %s", url.c_str());
         SpeedProfile profile = SPEED_PROFILES[state.speedProfile];
         if (_blockMultipart)
             profile.maxPartsPerRequest = 1;
 
-        uint64_t totalSize = 0;
-        int rangesCnt = 0;
-        int end = state.doneCnt;
-        uint32_t last = UINT32_MAX;
-        std::vector<SubTask> subtasks;
+        std::vector<SubTask> subtasks;  //set of chunks scheduled as one request
+        uint64_t totalSize = 0;         //total number of bytes scheduled into request
+        int rangesCnt = 0;              //number of separate byteranges scheduled
+        uint32_t last = UINT32_MAX;     //end of the last byterange
 
+        int end = state.doneCnt;
+        //grab a few next downloads for the next HTTP request
         while (end < n) {
+            //what if we add the whole next download? (or what remains of it)
             int idx = state.downloadsIds[end];
             const Download &down = _downloads[idx];
             uint32_t downStart = down.src.byterange[0] + state.doneBytesNext;
@@ -150,6 +159,7 @@ void Downloader::DownloadAllForUrl(const std::string &url) {
             //stop before this download if it exceeds ranges limit
             if (newRangesCnt > profile.maxPartsPerRequest)
                 break;
+            //does it exceed size limit?
             if (newTotalSize > profile.maxRequestSize) {
                 if (subtasks.size() > 0) {
                     //we have added at least one download already,
@@ -157,27 +167,32 @@ void Downloader::DownloadAllForUrl(const std::string &url) {
                     break;
                 }
                 if (downEnd != UINT32_MAX) {
-                    //this download is larger than limit: split it and download part only
+                    //this download is larger than limit: split it and download only a part of it
                     SubTask st = {idx, {downStart, downStart + profile.maxRequestSize}};
                     subtasks.push_back(st);
                     break;
                 }
                 //single request with unknown size: never split...
+                //note that we will soon discover its size from HTTP headers
+                //so if timeout happens, then we will be able to split it on retry
             }
 
-            //add this full download to request
+            //no limit exceeded -> add this full download to scheduled request
             end++;
             SubTask st = {idx, {downStart, downEnd}};
             subtasks.push_back(st);
+
+            //update stats for limit checks on next iterations
             last = downEnd;
             totalSize = newTotalSize;
             rangesCnt = newRangesCnt;
         }
 
+        //perform the HTTP request
         bool ok = DownloadOneRequest(url, subtasks, profile.lowSpeedTime, profile.connectTimeout);
 
         if (ok) {
-            //update number of finished downloads
+            //update number of fully finished downloads
             state.doneCnt = end;
             //update progress in the next download
             if (end < state.downloadsIds.size() && subtasks.back().downloadIdx == state.downloadsIds[end]) {
@@ -192,8 +207,8 @@ void Downloader::DownloadAllForUrl(const std::string &url) {
             //reset speed profile
             for (int i = 0; i < state.speedProfile; i++)
                 if (speedLastFailedAt[i] < 0 || _totalBytesDownloaded - speedLastFailedAt[i] > SPEED_PROFILES[i].maxRequestSize) {
-                    //last time we failed with this long time ago
-                    //so let's try this speed again
+                    //last time when we failed with this profile was long time ago
+                    //so let's try this speed again, maybe it will work now
                     state.speedProfile = i;
                     break;
                 }
@@ -208,8 +223,9 @@ void Downloader::DownloadAllForUrl(const std::string &url) {
 
 bool Downloader::DownloadOneRequest(const std::string &url, const std::vector<SubTask> &subtasks, int lowSpeedTime, int connectTimeout) {
     if (subtasks.empty())
-        return true;
+        return true;    //scheduling algorithm should never even create such requests...
 
+    //generate byterange string with all adjacent chunks merged
     std::vector<std::pair<uint32_t, uint32_t>> coaslescedRanges;
     for (const SubTask &st : subtasks) {
         if (!coaslescedRanges.empty() && coaslescedRanges.back().second >= st.byterange[0])
@@ -222,37 +238,49 @@ bool Downloader::DownloadOneRequest(const std::string &url, const std::vector<Su
         if (!byterangeStr.empty())
             byterangeStr += ",";
         byterangeStr += std::to_string(rng.first) + "-";
-        if (rng.second != UINT32_MAX)   //-1 means "up to the end"
+        if (rng.second != UINT32_MAX)   //it means "up to the end"
             byterangeStr += std::to_string(rng.second - 1);
     }
 
+    //compute "progressWeight": which portion of the whole job this particular request is?
     int64_t totalEstimate = 0;
     int64_t thisEstimate = 0;
     for (const SubTask &st : subtasks) {
         const Download &down = _downloads[st.downloadIdx];
+        //subtask includes [from..to) chunk of [0..full) range
         int64_t from = st.byterange[0] - down.src.byterange[0];
         int64_t to = std::min(st.byterange[1], down.src.byterange[1]) - down.src.byterange[0];
         int64_t full = down.src.byterange[1] - down.src.byterange[0];
+        //such way guarantees that sum of "thisEstimate" over all chunks of download
+        //will be exactly equal to "full", regardless of how download was split
         thisEstimate += to * down.progressSize / full - from * down.progressSize / full;
     }
     for (const auto &down : _downloads)
         totalEstimate += down.progressSize;
+    double progressWeight = double(thisEstimate) / totalEstimate;
 
+//------------------- CURL callbacks: begin -------------------
     auto header_callback = [](char *buffer, size_t size, size_t nitems, void *userdata) {
         size *= nitems;
         auto &resp = *((Downloader*)userdata)->_currResponse;
         std::string str(buffer, buffer + size);
         size_t from, to, all;
         if (const char *tail = CheckHttpPrefix(str, "Content-Range: bytes ")) {
+            //this is an ordinary byterange response
             if (sscanf(tail, "%zu-%zu/%zu", &from, &to, &all) == 3) {
+                //memorize which byterange is actually returned by server
                 resp.onerange[0] = from;
                 resp.onerange[1] = to + 1;
+                //memorize size of the file (which we don't know initially for whole-file downloads)
                 resp.totalSize = all;
             }
         }
         char boundary[128] = {0};
         if (const char *tail = CheckHttpPrefix(str, "Content-Type: multipart/byteranges; boundary=")) {
+            //this is a multipart byterange request
+            //we will have to manually parse response content later
             if (sscanf(tail, "%s", boundary) == 1) {
+                //memorize boundary between parts
                 resp.boundary = std::string("\r\n--") + boundary;// + "\r\n";
             }
         }
@@ -262,7 +290,7 @@ bool Downloader::DownloadOneRequest(const std::string &url, const std::vector<Su
         size *= nitems;
         auto &resp = *((Downloader*)userdata)->_currResponse;
         if (resp.onerange[0] == resp.onerange[1] && resp.boundary.empty())
-            return 0;  //neither range nor multipart response -> halt
+            return 0;  //neither range nor multipart response -> stop
         resp.data.insert(resp.data.end(), buffer, buffer + size);
         return size;
     };
@@ -276,9 +304,14 @@ bool Downloader::DownloadOneRequest(const std::string &url, const std::vector<Su
         }
         return 0;
     };
+//-------------------- CURL callbacks: end --------------------
+
+    //prepare temporary structure for response
     _currResponse.reset(new CurlResponse());
     _currResponse->url = url;
-    _currResponse->progressWeight = double(thisEstimate) / totalEstimate;
+    _currResponse->progressWeight = progressWeight;
+
+    //set up CURL request
     CURL *curl = _curlHandle.get();
     std::string reprocmd = "curl";
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
@@ -302,70 +335,102 @@ bool Downloader::DownloadOneRequest(const std::string &url, const std::vector<Su
         curl_easy_setopt(curl, CURLOPT_USERAGENT, _useragent->c_str());
         reprocmd += formatMessage(" -A \"%s\"", _useragent->c_str());
     }
+    //log request as CURL command
+    //it can be used to save and reproduce the problematic request with curl executable
     int reqIdx = _curlRequestIdx++;
     reprocmd += formatMessage(" -o out%d.bin", reqIdx);
     g_logger->debugf("[curl-cmd] %s", reprocmd.c_str());
+    //notify user that we start downloading from this URL
     UpdateProgress();
+
+    //perform the request
     CURLcode ret = curl_easy_perform(curl);
     long httpRes = 0;
     curl_easy_getinfo(curl, CURLINFO_HTTP_CODE, &httpRes);
+
+    //handle return/error codes
     if (_currResponse->totalSize != UINT_MAX && _downloads[subtasks.front().downloadIdx].src.byterange[1] == UINT_MAX) {
-        //even if we have failed, now we know size of this file thanks to headers
+        //even if we have failed, now we know the size of this file (thanks to HTTP header)
         _downloads[subtasks.front().downloadIdx].src.byterange[1] = _currResponse->totalSize;
     }
-    if (ret != 0 || (httpRes != 200 && httpRes != 206))
+    if (ret != 0 || (httpRes != 200 && httpRes != 206)) {
+        //log down atypical error codes
         g_logger->debugf("[curl-res] ret:%d http:%d", ret, httpRes);
-    if (ret == CURLE_ABORTED_BY_CALLBACK)
+    }
+    if (ret == CURLE_ABORTED_BY_CALLBACK) {
+        //logger error must throw exception, which stops whole job and returns control back to caller
         g_logger->errorf(lcUserInterrupt, "Interrupted by user");
+    }
     if (ret == CURLE_OPERATION_TIMEDOUT) {
+        //all kind of timeouts get here
+        //they happen all the time on problematic networks,
+        //so we should retry this request again (or maybe a smaller piece of it)
         g_logger->warningf(lcDownloadTooSlow,
             "Timeout for request with %d segments of total size %lld on URL %s",
             int(subtasks.size()), thisEstimate, url.c_str()
         );
         return false;   //soft fail: retry is welcome
     }
+    //handle a few more errors with clear reasons
     ZipSyncAssertF(httpRes != 404, "Not found result for URL %s", url.c_str());
     ZipSyncAssertF(ret != CURLE_WRITE_ERROR, "Response without byteranges for URL %s", url.c_str());
+    //handle all the unexpected errors
     ZipSyncAssertF(ret == CURLE_OK, "Unexpected CURL error %d on URL %s", ret, url.c_str());
     ZipSyncAssertF(httpRes == 200 || httpRes == 206, "Unexpected HTTP return code %d for URL %s", httpRes, url.c_str());
+
+    //update progress indicator given that whole request is done
     _currResponse->progressRatio = 1.0;
     UpdateProgress();
+    _totalBytesDownloaded += _currResponse->bytesDownloaded;
+    _totalProgress += _currResponse->progressWeight;
 
+    //parse multipart response, producing many single-range responses instead
     std::vector<CurlResponse> results;
     if (_currResponse->boundary.empty())
         results.push_back(std::move(*_currResponse));
     else
         BreakMultipartResponse(*_currResponse, results);
 
-    _totalBytesDownloaded += _currResponse->bytesDownloaded;
-    _totalProgress += _currResponse->progressWeight;
+    //we have already pulled out all we need from this structure, break it down
     _currResponse.reset();
 
     std::sort(results.begin(), results.end(), [](const CurlResponse &a, const CurlResponse &b) {
         return a.onerange[0] < b.onerange[0];
     });
+
+    //handle downloaded data: fire download callbacks, append data for partial subtasks
     for (const SubTask &st : subtasks) {
         int idx = st.downloadIdx;
         const auto &downSrc = _downloads[idx].src;
-        std::vector<uint8_t> &answer = _downloads[idx].answer;
+        std::vector<uint8_t> &answer = _downloads[idx].resultData;
+
+        //find all pieces in the downloaded results which are about this subtask
         for (const auto &resp : results) {
+            //intersect byterange intervals of the subtask and response (remaining part of it)
             uint32_t currPos = downSrc.byterange[0] + (uint32_t)answer.size();
             uint32_t left = std::max(currPos, resp.onerange[0]);
             uint32_t right = std::min(downSrc.byterange[1], resp.onerange[1]);
             if (right <= left)
-                continue;
+                continue;   //no intersection
+
             ZipSyncAssertF(left == currPos, "Missing chunk %u..%u (%u bytes) after downloading URL %s", left, currPos, currPos - left, url.c_str());
+            //take data from response in the intersection range
             answer.insert(answer.end(),
                 resp.data.data() + (left - resp.onerange[0]),
                 resp.data.data() + (right - resp.onerange[0])
             );
         }
+
+        //note: st.byterange[1] may be UINT_MAX for whole-file downloads
         if (st.byterange[1] >= downSrc.byterange[1]) {
+            //we have just appended the very last bits of this download
             if (downSrc.byterange[1] != UINT32_MAX) {
                 uint32_t totalSize = downSrc.byterange[1] - downSrc.byterange[0];
                 ZipSyncAssertF(answer.size() == totalSize, "Missing end chunk %zu..%u (%u bytes) after downloading URL %s", answer.size(), totalSize, totalSize - (uint32_t)answer.size(), url.c_str());
             }
+            //pass full data to user via callback
             _downloads[idx].finishedCallback(answer.data(), answer.size());
+            //drop the data from memory (to avoid using gigabytes of virtual memory)
             answer.clear();
             answer.shrink_to_fit();
         }
