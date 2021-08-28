@@ -21,9 +21,10 @@ struct SpeedProfile {
 //if request fails due to timeout, we retry it with progressively softer limits
 static const SpeedProfile SPEED_PROFILES[] = {
     {10<<20, 20, 10, 10},
-    {1<<20, 5, 10, 10},
-    {1<<20, 1, 10, 30},
-    {256<<10, 1, 60, 60}
+    {512<<10, 1, 10, 10},
+    {32<<10, 1, 10, 30},
+    {4<<10, 1, 10, 30},
+    {4<<10, 1, 60, 60}
 };
 static const int SPEED_PROFILES_NUM = sizeof(SPEED_PROFILES) / sizeof(SPEED_PROFILES[0]);
 
