@@ -15,7 +15,22 @@
 namespace ZipSync {
 
 bool FileMetainfo::IsLess_ByZip(const FileMetainfo &a, const FileMetainfo &b) {
-    return std::tie(a.zipPath.rel, a.filename, a.contentsHash) < std::tie(b.zipPath.rel, b.filename, b.contentsHash);
+    auto GetTuple = [](const FileMetainfo &m) -> auto {
+        return std::tie(
+            //the main properties to sort by
+            m.zipPath.rel, m.filename,
+            //the above props should always differ under normal use
+            //but better provide tie-breaker to make order deterministic
+            //and we need this in fuzzy tests (not a normal use of course)
+            m.contentsHash, m.compressedHash, m.package,
+            m.props.lastModTime, m.props.compressionMethod, m.props.generalPurposeBitFlag,
+            m.props.internalAttribs, m.props.externalAttribs, m.props.compressedSize,
+            m.props.contentsSize, m.props.crc32,
+            //these come last: they are missing anyway in target manifests
+            m.byterange[0], m.byterange[1]
+        );
+    };
+    return GetTuple(a) < GetTuple(b);
 }
 
 void FileMetainfo::Nullify() {
