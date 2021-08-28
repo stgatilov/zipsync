@@ -46,6 +46,7 @@ class Downloader {
         DownloadSource src;
         DownloadFinishedCallback finishedCallback;
         std::vector<uint8_t> answer;        //temporary storage (in case of split)
+        int64_t progressSize = 0;           //estimate of size in bytes (for progress indicator)
     };
     std::vector<Download> _downloads;
 
@@ -66,6 +67,7 @@ class Downloader {
 
         std::vector<uint8_t> data;
         uint32_t onerange[2] = {UINT_MAX, UINT_MAX};
+        uint32_t totalSize = UINT_MAX;
         std::string boundary;
 
         double progressRatio = 0.0;         //which portion of this CURL request is done
@@ -101,7 +103,6 @@ private:
     bool DownloadOneRequest(const std::string &url, const std::vector<SubTask> &subtasks, int lowSpeedTime, int connectTimeout);
     void BreakMultipartResponse(const CurlResponse &response, std::vector<CurlResponse> &parts);
     int UpdateProgress();
-    size_t BytesToTransfer(const uint32_t byterange[2]);
 };
 
 }

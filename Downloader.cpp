@@ -54,8 +54,18 @@ Downloader::~Downloader() {}
 Downloader::Downloader() : _curlHandle(nullptr, curl_easy_cleanup) {}
 
 void Downloader::EnqueueDownload(const DownloadSource &source, const DownloadFinishedCallback &finishedCallback) {
-    _downloads.push_back(Download{source, finishedCallback});
+    Download down;
+    down.src = source;
+    down.finishedCallback = finishedCallback;
+
+    down.progressSize = down.src.byterange[1] - down.src.byterange[0];
+    if (down.src.byterange[1] == UINT_MAX)
+        down.progressSize = (1<<20);    //rough estimate of unknown size
+    down.progressSize += ESTIMATED_DOWNLOAD_OVERHEAD;
+
+    _downloads.push_back(down);
 }
+
 void Downloader::SetProgressCallback(const GlobalProgressCallback &progressCallback) {
     _progressCallback = progressCallback;
 }
@@ -209,10 +219,15 @@ bool Downloader::DownloadOneRequest(const std::string &url, const std::vector<Su
 
     int64_t totalEstimate = 0;
     int64_t thisEstimate = 0;
-    for (const SubTask &st : subtasks)
-        thisEstimate += BytesToTransfer(st.byterange);
+    for (const SubTask &st : subtasks) {
+        const Download &down = _downloads[st.downloadIdx];
+        int64_t from = st.byterange[0] - down.src.byterange[0];
+        int64_t to = std::min(st.byterange[1], down.src.byterange[1]) - down.src.byterange[0];
+        int64_t full = down.src.byterange[1] - down.src.byterange[0];
+        thisEstimate += to * down.progressSize / full - from * down.progressSize / full;
+    }
     for (const auto &down : _downloads)
-        totalEstimate += BytesToTransfer(down.src.byterange);
+        totalEstimate += down.progressSize;
 
     auto header_callback = [](char *buffer, size_t size, size_t nitems, void *userdata) {
         size *= nitems;
@@ -223,6 +238,7 @@ bool Downloader::DownloadOneRequest(const std::string &url, const std::vector<Su
             if (sscanf(tail, "%zu-%zu/%zu", &from, &to, &all) == 3) {
                 resp.onerange[0] = from;
                 resp.onerange[1] = to + 1;
+                resp.totalSize = all;
             }
         }
         char boundary[128] = {0};
@@ -284,6 +300,10 @@ bool Downloader::DownloadOneRequest(const std::string &url, const std::vector<Su
     CURLcode ret = curl_easy_perform(curl);
     long httpRes = 0;
     curl_easy_getinfo(curl, CURLINFO_HTTP_CODE, &httpRes);
+    if (_currResponse->totalSize != UINT_MAX && _downloads[subtasks.front().downloadIdx].src.byterange[1] == UINT_MAX) {
+        //even if we have failed, now we know size of this file thanks to headers
+        _downloads[subtasks.front().downloadIdx].src.byterange[1] = _currResponse->totalSize;
+    }
     if (ret != 0 || (httpRes != 200 && httpRes != 206))
         g_logger->debugf("[curl-res] ret:%d http:%d", ret, httpRes);
     if (ret == CURLE_ABORTED_BY_CALLBACK)
@@ -402,13 +422,6 @@ int Downloader::UpdateProgress() {
         return code;
     }
     return 0;
-}
-
-size_t Downloader::BytesToTransfer(const uint32_t byterange[2]) {
-    size_t dataSize = byterange[1] - byterange[0];
-    if (byterange[1] == UINT32_MAX)
-        dataSize = (1<<20); //a wild guess =)
-    return dataSize + ESTIMATED_DOWNLOAD_OVERHEAD;
 }
 
 }
