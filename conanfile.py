@@ -6,8 +6,8 @@ class ZipsyncConan(ConanFile):
     settings = "os", "compiler", "build_type", "arch"
     generators = "CMakeDeps", "CMakeToolchain"
     requires = [
-        "zlib/1.2.11",      # TODO: update
-        "minizip/1.2.11",   # TODO: update
+        "zlib/1.3.1",
+        "minizip/1.3.1",
         "libcurl/8.6.0",
         "doctest/2.4.11",
         "blake2/20190724@zipsync",
