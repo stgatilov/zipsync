@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(ZIPSYNC_OPTION_BUILD_TESTS "build executable with unit tests" ON)
 option(ZIPSYNC_OPTION_BUILD_TOOL "build command-line zipsync tool" ON)
-
+option(ZIPSYNC_OPTION_THIRDPARTY_MODULE_MODE "link third-party libs using module mode of find_package" OFF)
 
 set(lib_sources
     minizip_extra.c
@@ -77,7 +77,12 @@ find_package(CURL REQUIRED)
 find_package(blake2 REQUIRED)
 
 add_library(libzipsync STATIC ${lib_sources})
-target_link_libraries(libzipsync PUBLIC minizip::minizip blake2::blake2 PRIVATE CURL::libcurl)
+if(ZIPSYNC_OPTION_THIRDPARTY_MODULE_MODE)
+    target_include_directories(libzipsync PUBLIC ${minizip_INCLUDE_DIRS} ${zlib_INCLUDE_DIRS} ${BLAKE2_INCLUDE_DIRS} PRIVATE ${CURL_INCLUDE_DIRS})
+    target_link_libraries(libzipsync PRIVATE ${minizip_LIBRARIES} ${zlib_LIBRARIES} ${BLAKE2_LIBRARIES} ${CURL_LIBRARIES})
+else()
+    target_link_libraries(libzipsync PUBLIC minizip::minizip blake2::blake2 PRIVATE CURL::libcurl)
+endif()
 
 add_library(libzipsyncextra STATIC ${extralib_sources})
 target_link_libraries(libzipsyncextra PUBLIC libzipsync)
@@ -86,15 +91,15 @@ if(NOT MSVC)
 endif()
 
 if(ZIPSYNC_OPTION_BUILD_TESTS)
-    find_package(doctest REQUIRED)
-    find_package(libmicrohttpd REQUIRED)
+    find_package(doctest REQUIRED CONFIG)
+    find_package(libmicrohttpd REQUIRED CONFIG)
 
     add_executable(tests ${tests_sources})
     target_link_libraries(tests libzipsync libzipsyncextra doctest::doctest libmicrohttpd::libmicrohttpd CURL::libcurl minizip::minizip blake2::blake2)
 endif()
 
 if(ZIPSYNC_OPTION_BUILD_TOOL)
-    find_package(args REQUIRED)
+    find_package(args REQUIRED CONFIG)
 
     add_executable(zipsync ${zipsynccmd_sources})
     target_link_libraries(zipsync libzipsync libzipsyncextra args::args)
