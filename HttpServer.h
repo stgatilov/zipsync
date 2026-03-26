@@ -5,7 +5,15 @@
 
 struct MHD_Daemon;
 struct MHD_Connection;
-enum MHD_Result;
+#ifdef __has_include
+  #if __has_include(<microhttpd.h>)
+    #include <microhttpd.h>
+  #else
+    enum MHD_Result;
+  #endif
+#else
+  enum MHD_Result;
+#endif
 
 //workaround for ssize_t-included errors on MSVC
 #ifdef _MSC_VER
