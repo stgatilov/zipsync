@@ -81,7 +81,6 @@ if(MSVC)
     add_compile_options("$<$<CONFIG:Release>:/Zi>")
 endif()
 
-find_package(zlib REQUIRED)
 # minizip
 find_package(minizip CONFIG QUIET)
 if(NOT minizip_FOUND)
