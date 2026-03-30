@@ -80,7 +80,7 @@ target_link_libraries(libzipsync PUBLIC minizip::minizip blake2::blake2 PRIVATE 
 
 add_library(libzipsyncextra STATIC ${extralib_sources})
 target_link_libraries(libzipsyncextra PUBLIC libzipsync)
-if(NOT MSVC)
+if(NOT MSVC AND NOT APPLE)
     target_link_libraries(libzipsyncextra PUBLIC stdc++fs)
 endif()
 
