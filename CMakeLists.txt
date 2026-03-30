@@ -1,18 +1,7 @@
 cmake_minimum_required (VERSION 3.9.6)
 project(zipsync CXX C)
 
-include(CheckCXXSourceCompiles)
-
-# Check if C++17 filesystem is available
 set(CMAKE_CXX_STANDARD 17)
-check_cxx_source_compiles(
-    "#include <filesystem>
-     int main() { std::filesystem::path p; return 0; }"
-    HAS_CXX17_FILESYSTEM)
-
-if(NOT HAS_CXX17_FILESYSTEM)
-    set(CMAKE_CXX_STANDARD 11)
-endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(ZIPSYNC_OPTION_BUILD_TESTS "build executable with unit tests" ON)

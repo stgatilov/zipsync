@@ -1,26 +1,9 @@
 #include "StdFilesystem.h"
 
-#if defined(_MSC_VER) && _MSC_VER < 1910
-    //STL-based implementation for MSVC2013
-    #include <filesystem>
-    namespace stdfsys = std::tr2::sys;
-    //TODO: support later versions of MSVC
-#elif defined(__APPLE__)
-    // Apple Clang dropped experimental/filesystem; always use C++17 version
-    #include <filesystem>
-    namespace stdfsys = std::filesystem;
-#else
-    //it should be here for both GCC and Clang
-    //MSVC2017 is also OK with it
-    #if _HAS_CXX17
-        #include <filesystem>
-        namespace stdfsys = std::filesystem;
-    #else
-        #define _SILENCE_EXPERIMENTAL_FILESYSTEM_DEPRECATION_WARNING
-        #include <experimental/filesystem>
-        namespace stdfsys = std::experimental::filesystem;
-    #endif
-#endif
+// TODO: switch to std::filesystem when it includes something like file_time_type::clock::to_time_t
+#define _SILENCE_EXPERIMENTAL_FILESYSTEM_DEPRECATION_WARNING
+#include <experimental/filesystem>
+namespace stdfsys = std::experimental::filesystem;
 
 namespace stdext {
     struct path_impl : public stdfsys::path {
@@ -145,23 +128,8 @@ namespace stdext {
     std::time_t last_write_time(const path& p) {
         std::time_t res;
         try {
-            #if defined(_MSC_VER) && _MSC_VER <= 1800
-                res = stdfsys::last_write_time(get(p));
-            #else
-                auto tt = stdfsys::last_write_time(get(p));
-                // Convert filesystem clock timestamp to time_t via system_clock.
-                // We cannot use file_time_type::clock::to_time_t() directly — it is a
-                // GCC extension and is not implemented in Apple's libc++ (nor required
-                // by the C++17 standard). Instead, we compute the offset of 'tt' from
-                // the filesystem clock's "now", then apply that same offset to the
-                // system clock's "now", bridging between the two clocks' epochs.
-                // The two now() calls introduce a negligible (~nanosecond) imprecision,
-                // which is acceptable for file timestamp purposes.
-				auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
-				    tt - stdfsys::file_time_type::clock::now()
-				       + std::chrono::system_clock::now());
-                res = std::chrono::system_clock::to_time_t(sctp);
-            #endif
+            auto tt = stdfsys::last_write_time(get(p));
+            res = stdfsys::file_time_type::clock::to_time_t(tt);
         }
         catch(stdfsys::filesystem_error &e) { throw filesystem_error(e.what(), e.code()); }
         return res;
@@ -186,11 +154,7 @@ namespace stdext {
     path current_path() {
         path_impl res;
         try {
-            #if defined(_MSC_VER) && _MSC_VER <= 1800
-                res = stdfsys::current_path<stdfsys::path>();
-            #else
-                res = stdfsys::current_path();
-            #endif
+            res = stdfsys::current_path();
         }
         catch(stdfsys::filesystem_error &e) { throw filesystem_error(e.what(), e.code()); }
         return path(res);
